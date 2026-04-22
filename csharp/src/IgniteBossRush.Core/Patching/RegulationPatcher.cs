@@ -9,7 +9,7 @@ using SoulsFormats;
 namespace IgniteBossRush.Core.Patching;
 
 /// <summary>
-/// Regulation.bin patcher for the 9-tier × 11-slot Boss Rush shop.
+/// Regulation.bin patcher for the 9-tier × 7-slot Boss Rush shop.
 ///
 /// <para>
 /// <b>Phase A (landed previously):</b> BND4 load → param-file locator →
@@ -33,17 +33,42 @@ namespace IgniteBossRush.Core.Patching;
 ///     <see cref="RegulationConstants.ItemLotCategoryGoods"/> and a 100%
 ///     base-point weight. The tier-clear EMEVD event references these
 ///     ItemLot IDs through <c>AwardItemLot(shard_award_lot_id)</c>.</item>
-///   <item><b>ShopLineupParam</b>: create 99 rows (9 tiers × 11 slots) at
+///   <item><b>ShopLineupParam</b>: create 63 rows (9 tiers × 7 slots) at
 ///     <see cref="RegulationConstants.ShopLineupRowId(int, int)"/>. Per-row
 ///     shape: <c>equipId</c>/<c>equipType</c> from
 ///     <see cref="TierPlan.Slots"/>, <c>eventFlag_forStock</c> from
 ///     <see cref="TierPlan.ShopVisibilityFlag"/> (gated per-tier visibility),
 ///     <c>costType</c>=<see cref="RegulationConstants.ShopCostTypeStarlightShards"/>
 ///     (engine deducts Starlight Shards from inventory), <c>value</c>=1
-///     (one shard per slot), <c>mtrlId</c>=0 (unused when costType=2),
+///     (one shard per slot), <c>mtrlId</c>=-1 (no material gate),
 ///     <c>sellQuantity</c>=1 (one-shot per tier, enforced by the stock
 ///     flag + single-item quantity).</item>
 /// </list>
+/// </para>
+///
+/// <para>
+/// <b>Shop window title.</b> Each tier's shop rows set
+/// <c>menuTitleMsgId</c> = <c>508000 + N</c>, pointing at
+/// "Boss Rush - Tier N" entries that <see cref="FmgPatcher"/> inserts
+/// into <c>menu_dlc02.msgbnd.dcx</c> / <c>GR_MenuText.fmg</c>. A full
+/// shop patch therefore requires BOTH regulation.bin (this class) and
+/// the msgbnd.dcx (FmgPatcher) — running the regulation pass alone
+/// makes the title render as "?MenuText?" placeholder.
+/// </para>
+///
+/// <para>
+/// <b>Known cosmetic bug (pinned — engine limitation).</b> The purchase-
+/// confirmation dialog renders "for N runes" regardless of
+/// <c>costType=2</c>. The deduction is correct (Starlight Shards are
+/// consumed), only the label is wrong. Athena Randomizer has the same
+/// issue — inspecting their menu_dlc02.msgbnd.dcx shows they only
+/// override the shop <i>title</i> ("Starlight Shop" via msg 508000),
+/// not the dialog's currency format string. Elden Ring's shop UI has no
+/// built-in template for non-rune currency text; the only way to swap
+/// "runes" for "Starlight Shards" would be to globally patch the system
+/// FMG, which affects every shop in the game. See
+/// <see cref="RegulationConstants.ShopCostTypeStarlightShards"/> for
+/// the full investigation trail.
 /// </para>
 ///
 /// <para>
@@ -169,11 +194,18 @@ public sealed class RegulationPatcher
     // ---------------------------------------------------------------------
     /// <summary>
     /// Refuse to patch a plan we can't faithfully represent in
-    /// regulation.bin. Today that means: cost-per-slot must be exactly
-    /// <see cref="RegulationConstants.ShopCostPerSlotAmberShards"/> (1),
-    /// the spec-locked value. Anything else would require a row-duplication
-    /// trick we've not built yet; better to fail loud than to silently
-    /// under-charge players.
+    /// regulation.bin. Today that means:
+    /// <list type="bullet">
+    ///   <item>Slot count per tier must be in
+    ///     <c>[<see cref="RegulationConstants.ShopSlotsPerTier"/>,
+    ///     <see cref="RegulationConstants.ShopSlotsPerTier"/>+1]</c> —
+    ///     the base count, with an optional Great Rune bonus slot.</item>
+    ///   <item>Per-slot cost (in Starlight Shards) must be
+    ///     <c>&gt;= 1 &amp;&amp; &lt;= 99</c> — the practical range the
+    ///     ShopLineupParam <c>value</c> field can display cleanly in the
+    ///     merchant UI. We no longer hard-pin to 1, so Great Rune slots
+    ///     can charge 3 shards and base slots can stay at 1.</item>
+    /// </list>
     /// </summary>
     internal static void ValidatePlan(TierRewardsPlan plan)
     {
@@ -181,23 +213,25 @@ public sealed class RegulationPatcher
         if (plan.Tiers is null || plan.Tiers.Count == 0)
             throw new ArgumentException("plan must contain tiers", nameof(plan));
 
+        int minSlots = RegulationConstants.ShopSlotsPerTier;       // 7
+        int maxSlots = RegulationConstants.ShopSlotsPerTier + 1;   // 8 (with Great Rune)
         foreach (var tier in plan.Tiers)
         {
-            if (tier.Slots is null || tier.Slots.Count != RegulationConstants.ShopSlotsPerTier)
+            int got = tier.Slots?.Count ?? 0;
+            if (tier.Slots is null || got < minSlots || got > maxSlots)
                 throw new ArgumentException(
-                    $"tier {tier.Tier}: expected {RegulationConstants.ShopSlotsPerTier} slots, "
-                    + $"got {tier.Slots?.Count ?? 0}", nameof(plan));
+                    $"tier {tier.Tier}: expected {minSlots} or {maxSlots} slots, "
+                    + $"got {got}", nameof(plan));
 
             for (int i = 0; i < tier.Slots.Count; i++)
             {
                 var slot = tier.Slots[i];
-                if (slot.CostAmberShards != RegulationConstants.ShopCostPerSlotAmberShards)
+                if (slot.CostAmberShards < 1 || slot.CostAmberShards > 99)
                     throw new NotSupportedException(
                         $"tier {tier.Tier} slot {i}: CostAmberShards={slot.CostAmberShards} "
-                        + $"but ShopLineupParam's mtrlId barter charges exactly "
-                        + $"{RegulationConstants.ShopCostPerSlotAmberShards} unit. "
-                        + "Multi-shard costs need a row-duplication workaround that is "
-                        + "not implemented in Phase B.");
+                        + "is out of range [1, 99]. ShopLineupParam's value field "
+                        + "supports higher values, but the merchant UI only renders "
+                        + "1-2 digit prices cleanly.");
             }
         }
     }
@@ -268,10 +302,10 @@ public sealed class RegulationPatcher
     }
 
     // ---------------------------------------------------------------------
-    // ShopLineupParam — 99 rows (9 tiers × 11 slots)
+    // ShopLineupParam — 63 rows (9 tiers × 7 slots)
     // ---------------------------------------------------------------------
     /// <summary>
-    /// Create 99 ShopLineupParam rows at
+    /// Create 63 ShopLineupParam rows at
     /// <see cref="RegulationConstants.ShopLineupRowId(int, int)"/> — one per
     /// tier × slot. Per row:
     /// <c>equipId</c>=<see cref="ShopSlot.ParamId"/>,
@@ -282,7 +316,7 @@ public sealed class RegulationPatcher
     /// <c>sellQuantity</c>=1 (one-shot per tier),
     /// <c>setNum</c>=1 (one per transaction).
     /// </summary>
-    /// <returns>Number of rows written (9 tiers × 11 slots = 99).</returns>
+    /// <returns>Number of rows written (9 tiers × 7 slots = 63).</returns>
     internal static int MutateShopLineupParam(BinderFile file, PARAMDEF def, TierRewardsPlan plan)
     {
         PARAM param = ReadAndApply(file, def, RegulationConstants.ShopLineupParamDefXml);
@@ -310,14 +344,27 @@ public sealed class RegulationPatcher
 
                 SetCell(row, RegulationConstants.ShopLineupField_EquipId, slot.ParamId);
                 SetCell(row, RegulationConstants.ShopLineupField_EquipType, MapEquipType(slot.Kind));
-                // eventFlag_forRelease is the sales-unlock gate: row is visible
-                // in the merchant menu iff this flag is ON. eventFlag_forStock
-                // (also present on the row) is the sold-count field — pointing
-                // the visibility flag at _forStock was the prior bug that made
-                // every row read as "1 sold" and show permanently out-of-stock.
-                // Leave _forStock at its default (0) so it doesn't interact.
-                SetCell(row, RegulationConstants.ShopLineupField_EventFlagForRelease,
-                        (uint)tier.ShopVisibilityFlag);
+                // eventFlag_forRelease = 0 — OpenPuppetShop silently bails
+                // when this field points at a non-trivial gate; Athena's
+                // Moonwalk Starlight Shop rows leave it at 0 too. Per-tier
+                // visibility is still enforced at the ESD level via Kalé's
+                // AddTalkListDataIf menu entry, so dropping the row-level
+                // gate doesn't leak other tiers into the menu.
+                SetCell(row, RegulationConstants.ShopLineupField_EventFlagForRelease, 0u);
+
+                // eventFlag_forStock = unique-per-row flag so OpenPuppetShop
+                // recognises the row as "not yet purchased". Leaving this
+                // at 0 makes the engine probe system flag 0 (typically ON)
+                // and every row reads as sold-out → shop refuses to open.
+                // Athena points at vanilla "received this item" flags; we
+                // allocate fresh Ignite-Rush flags in the
+                // 1049308500..1049309370 range with stride 10 between
+                // adjacent slots — see RegulationConstants.BossRushShopStockFlag
+                // for why stride 10 matters (buying slot N in OpenPuppetShop
+                // writes to a range around its stock flag, so adjacent
+                // slots need ≥10 spacing to avoid sympathetic sold-out).
+                SetCell(row, RegulationConstants.ShopLineupField_EventFlagForStock,
+                        RegulationConstants.BossRushShopStockFlag(tier.Tier, slotIdx));
                 // mtrlId paramdef default is -1 (= "no material required"; see
                 // its description, "購入に必要な素材ID(-1:なし)"). Earlier we
                 // explicitly wrote 0 here under the assumption that costType=2
@@ -335,11 +382,18 @@ public sealed class RegulationPatcher
                 SetCell(row, RegulationConstants.ShopLineupField_SetNum, (ushort)1);
                 // costType=2 → currency is Starlight Shards (matches Athena
                 // Randomizer's DLC shard shop). The game reads `value` as the
-                // cost in that currency (1 shard per slot per the locked spec).
+                // cost in that currency (1 shard per slot for base slots,
+                // 3 for Great Rune slots). The UI label "Starlight Shards"
+                // vs "runes" is driven by menuTitleMsgId (see below), NOT
+                // by costType — that discovery is what closed the earlier
+                // "for N runes" cosmetic bug.
                 SetCell(row, RegulationConstants.ShopLineupField_CostType,
                         RegulationConstants.ShopCostTypeStarlightShards);
+                // Per-slot cost from the plan (base slots = 1 shard, Great
+                // Rune slots = 3 shards). See ShopRollGenerator.BaseSlotCostAmberShards
+                // and GreatRuneCostAmberShards for the defaults.
                 SetCell(row, RegulationConstants.ShopLineupField_Value,
-                        RegulationConstants.ShopCostPerSlotAmberShards);
+                        slot.CostAmberShards);
 
                 // Force the menu-display overrides to their "don't override"
                 // sentinels. Diagnosed via inspect-msgbnd: WeaponName FMG has
@@ -349,7 +403,15 @@ public sealed class RegulationPatcher
                 // treats 0 as a valid override pointing at message/icon #0.
                 SetCell(row, RegulationConstants.ShopLineupField_IconId, -1);
                 SetCell(row, RegulationConstants.ShopLineupField_NameMsgId, -1);
-                SetCell(row, RegulationConstants.ShopLineupField_MenuTitleMsgId, -1);
+                // Per-tier menu title override: tier N's shop window shows
+                // "Boss Rush - Tier N" at the top. The text is inserted
+                // into menu_dlc02.msgbnd.dcx's GR_MenuText.fmg by
+                // FmgPatcher; the message IDs are 508001..508009. Without
+                // a matching FmgPatcher run, the game renders
+                // "?MenuText?" placeholder instead — so regulation + FMG
+                // patching are a bundled pair.
+                SetCell(row, RegulationConstants.ShopLineupField_MenuTitleMsgId,
+                        RegulationConstants.BossRushShopTitleMsgId(tier.Tier));
                 SetCell(row, RegulationConstants.ShopLineupField_MenuIconId, (short)-1);
                 SetCell(row, RegulationConstants.ShopLineupField_ValueMagnification, 1.0f);
 
@@ -435,12 +497,13 @@ public sealed class RegulationPatcher
     /// </summary>
     internal static byte MapEquipType(string kind) => kind switch
     {
-        ShopSlotKinds.Weapon   => RegulationConstants.ShopEquipTypeWeapon,
-        ShopSlotKinds.Talisman => RegulationConstants.ShopEquipTypeAccessory,
-        ShopSlotKinds.AshOfWar => RegulationConstants.ShopEquipTypeGem,
-        ShopSlotKinds.Tear     => RegulationConstants.ShopEquipTypeGoods,
+        ShopSlotKinds.Weapon    => RegulationConstants.ShopEquipTypeWeapon,
+        ShopSlotKinds.Talisman  => RegulationConstants.ShopEquipTypeAccessory,
+        ShopSlotKinds.AshOfWar  => RegulationConstants.ShopEquipTypeGem,
+        ShopSlotKinds.Tear      => RegulationConstants.ShopEquipTypeGoods,
+        ShopSlotKinds.GreatRune => RegulationConstants.ShopEquipTypeGoods,
         _ => throw new ArgumentException(
-            $"Unknown ShopSlot.Kind '{kind}'. Known: weapon, talisman, ash_of_war, tear.",
+            $"Unknown ShopSlot.Kind '{kind}'. Known: weapon, talisman, ash_of_war, tear, great_rune.",
             nameof(kind)),
     };
 

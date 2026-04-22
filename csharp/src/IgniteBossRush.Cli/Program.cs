@@ -67,6 +67,7 @@ Examples:
                 "inspect-esd" => InspectEsdCommand.Execute(rest),
                 "inspect-emevd" => InspectEmevdCommand.Execute(rest),
                 "inspect-msgbnd" => InspectMsgbndCommand.Execute(rest),
+                "inspect-regulation" => InspectRegulationCommand.Execute(rest),
                 "find-initialize" => FindInitializeCommand.Execute(rest),
                 "splice-kale"  => SpliceKaleCommand.Execute(rest),
                 _ => Fail($"Unknown command: {cmd}\n\n{Usage}"),

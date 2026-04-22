@@ -47,7 +47,7 @@ namespace IgniteBossRush.Core.Patching;
 /// <b>Tier 9 special-case.</b> The locked spec says "Tier 9 inventory persists
 /// after final clear". For tier 9 we still award shards (5 per tier, 45 total)
 /// and the engine still sets the award guard, but we SKIP the shard wipe.
-/// Result: the player keeps any leftover shards and Tier 9's 11 shop slots
+/// Result: the player keeps any leftover shards and Tier 9's 7 shop slots
 /// remain visible (TierUnlockVisibilitySplicer set vis(9) ON on unlock; no
 /// subsequent flip to OFF exists).
 ///

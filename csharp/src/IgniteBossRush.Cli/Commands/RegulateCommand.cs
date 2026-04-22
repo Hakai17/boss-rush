@@ -28,6 +28,12 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
   --out-regulation     <path>   destination regulation.bin (parent dir created)
   --out-rewards-dir    <path>   directory to write tier_rewards.json into
                                 (created; co-locates with the rewards fingerprint)
+  --source-menu-msgbnd <path>   (optional) source menu_dlc02.msgbnd.dcx. When
+                                provided alongside --out-menu-msgbnd, the
+                                command patches the menu FMG to add per-tier
+                                "Boss Rush - Tier N" titles so the shop window
+                                doesn't render "?MenuText?" in-game.
+  --out-menu-msgbnd    <path>   (optional) destination menu_dlc02.msgbnd.dcx.
   --force                       overwrite --out-regulation if it already exists
   --zero-boss-drops             also zero the ItemLotParam_enemy rows in the
                                 boss-drop bundle range (1049301000..1049301370
@@ -40,7 +46,8 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
     {
         var p = new ArgParser(
             knownOptions: new[] { "--shop-pool", "--seed", "--source-regulation",
-                                  "--out-regulation", "--out-rewards-dir" },
+                                  "--out-regulation", "--out-rewards-dir",
+                                  "--source-menu-msgbnd", "--out-menu-msgbnd" },
             knownFlags: new[] { "--help", "--force", "--zero-boss-drops" });
         p.Parse(args);
         if (p.HasFlag("--help")) { Console.WriteLine(Usage); return 0; }
@@ -49,6 +56,8 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
         string srcRegulation = p.Required("--source-regulation");
         string outRegulation = p.Required("--out-regulation");
         string outRewardsDir = p.Required("--out-rewards-dir");
+        string? sourceMenuMsgBnd = p.Optional("--source-menu-msgbnd");
+        string? outMenuMsgBnd    = p.Optional("--out-menu-msgbnd");
 
         string? seed = p.Optional("--seed");
         string seedOrigin = seed is null ? "auto-minted (128-bit)" : "user-supplied";
@@ -95,6 +104,38 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
                           + $"shop={regResult.ShopLineupParamRowsWritten})");
         if (regResult.BossDropLotsZeroed > 0)
             Console.WriteLine($"  boss drops zero : {regResult.BossDropLotsZeroed} rows in ItemLotParam_enemy");
+
+        // --- 3. menu FMG patch (optional) ---
+        // Paired with regulation patching: shop rows reference message IDs
+        // 508001..508009 for their per-tier window titles. Without this step,
+        // the game renders "?MenuText?" in place of the title.
+        if (sourceMenuMsgBnd is not null && outMenuMsgBnd is not null)
+        {
+            var titleEntries = new System.Collections.Generic.Dictionary<int, string>();
+            for (int tier = 1; tier <= 9; tier++)
+            {
+                titleEntries[RegulationConstants.BossRushShopTitleMsgId(tier)] =
+                    string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                                  RegulationConstants.BossRushShopTitleFormat, tier);
+            }
+            var fmgRes = FmgPatcher.Apply(
+                sourceMsgBndPath: sourceMenuMsgBnd,
+                outputPath: outMenuMsgBnd,
+                targetFmgName: RegulationConstants.BossRushShopTitleFmgName,
+                entries: titleEntries);
+            Console.WriteLine($"patched menu FMG  : {fmgRes.OutputPath}");
+            Console.WriteLine($"  DCX compression : {fmgRes.DcxCompressionType}");
+            Console.WriteLine($"  target FMG      : {fmgRes.TargetFmgName}");
+            Console.WriteLine($"  entries added   : {fmgRes.EntriesAdded}, replaced: {fmgRes.EntriesReplaced}");
+            Console.WriteLine($"  total entries   : {fmgRes.TotalEntriesInFmg}");
+        }
+        else if (sourceMenuMsgBnd is not null || outMenuMsgBnd is not null)
+        {
+            Console.Error.WriteLine(
+                "warning: --source-menu-msgbnd and --out-menu-msgbnd must be provided "
+                + "together; skipping menu FMG patch (shop titles will render as '?MenuText?')");
+        }
+
         return 0;
     }
 }

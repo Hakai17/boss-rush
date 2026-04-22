@@ -42,14 +42,17 @@
     <Content Include="..\..\data\source_mod\mod\**\*">
       <Link>data\mod\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="..\..\data\shop_pool.json">
       <Link>data\shop_pool.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
     <Content Include="..\..\data\template\**\*">
       <Link>data\template\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 
@@ -59,16 +62,99 @@
     the app's working directory, the pipeline throws NoOodleFoundException
     the first time it touches an emevd.dcx or msgbnd.dcx.
 
-    Canonical source is Phase0_RoundTripTest/ (same location the tests csproj
-    pulls from). Condition guard keeps the build green on source-only
-    checkouts where the DLL hasn't been dropped in yet.
+    ExcludeFromSingleFile=true is critical for PublishSingleFile=true publishes:
+    without it, the DLL gets bundled INTO IgniteRush.exe (and either embedded
+    or extracted to the %TEMP%\.net\...\ run-dir), which AppContext.BaseDirectory
+    doesn't point at. App.OnStartup pre-loads the DLL from BaseDirectory so
+    SoulsFormatsNEXT's bare LoadLibrary("oo2core_6_win64") call finds it by
+    name in the process's loaded-module table; that only works if the file
+    physically sits next to the launcher exe. For the Debug / multi-file
+    publish paths, ExcludeFromSingleFile is a no-op.
+
+    Content (not None) ensures consistent inclusion in `dotnet publish` output.
+    Condition guard keeps the build green on source-only checkouts where the
+    DLL hasn't been dropped in yet.
   -->
   <ItemGroup>
-    <None Include="..\..\oo2core_6_win64.dll"
-          Condition="Exists('..\..\oo2core_6_win64.dll')">
+    <Content Include="..\..\oo2core_6_win64.dll"
+             Condition="Exists('..\..\oo2core_6_win64.dll')">
       <Link>oo2core_6_win64.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
   </ItemGroup>
+
+  <!--
+    ZstdNet ships libzstd.dll via its own ZstdNet.targets file, which places
+    it at x64\libzstd.dll (and x86\libzstd.dll) in the build output. For
+    PublishSingleFile=true publishes, those items get bundled INTO the exe
+    and ZstdNet's own bootstrap (which computes the DLL path from
+    typeof(ZstdNet.ExternMethods).Assembly.Location) breaks because
+    Assembly.Location returns "" for embedded assemblies in single-file mode.
+
+    We explicitly re-copy libzstd.dll into publish\x64\libzstd.dll marked as
+    ExcludeFromSingleFile=true so it stays next to the launcher exe. App.xaml.cs
+    also registers a DllImport resolver on the ZstdNet assembly at startup and
+    pre-loads the DLL from this same path, covering both the case where
+    ZstdNet's own lookup fires first and the case where it's bypassed.
+
+    The NuGet cache path uses $(NuGetPackageRoot) which MSBuild resolves at
+    build time; the version is hard-coded to match the PackageReference.
+  -->
+  <ItemGroup>
+    <Content Include="$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll"
+             Condition="Exists('$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll')">
+      <Link>x64\libzstd.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    MSBuild's <Content> item mechanism has a bug/limitation where files ending
+    in .dcx (and .dcx.bak, .dcx.prev, etc.) get silently dropped during the
+    publish stage even though CopyToOutputDirectory+CopyToPublishDirectory are
+    both set and the files land correctly in bin/. ~308 of our ~1170 source_mod
+    files go missing this way, breaking the pipeline at stages that need the
+    dropped files (Splice Kale menu can't find talkesdbnd.dcx, etc.).
+
+    Workaround: after publish completes, run a Copy task over the same source
+    glob that unconditionally mirrors data\source_mod\mod\** into
+    $(PublishDir)\data\mod\**. SkipUnchangedFiles avoids rewriting unchanged
+    bytes on repeat publishes.
+  -->
+  <Target Name="CopyModDataAfterPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_ModSourceFiles Include="..\..\data\source_mod\mod\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ModSourceFiles)"
+          DestinationFiles="@(_ModSourceFiles->'$(PublishDir)data\mod\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="CopyModDataAfterPublish: mirrored @(_ModSourceFiles->Count()) files into $(PublishDir)data\mod\" />
+  </Target>
+
+  <!--
+    Also copy libzstd.dll from the NuGet cache into the publish x64 subfolder
+    after publish. We do this here (instead of via a Content item) because
+    Content items for files sourced outside the csproj tree don't always get
+    picked up by the publish stage in the PublishSingleFile=true path.
+  -->
+  <Target Name="CopyLibzstdAfterPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_LibzstdSource Include="$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll"
+                       Condition="Exists('$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LibzstdSource)"
+          DestinationFolder="$(PublishDir)x64"
+          SkipUnchangedFiles="true"
+          Condition="'@(_LibzstdSource)' != ''" />
+    <Message Importance="high"
+             Text="CopyLibzstdAfterPublish: copied libzstd.dll to $(PublishDir)x64\"
+             Condition="'@(_LibzstdSource)' != ''" />
+    <Warning Text="libzstd.dll not found at $(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll — stage 3/6 will fail at runtime with DllNotFoundException for ZstdNet."
+             Condition="'@(_LibzstdSource)' == ''" />
+  </Target>
 
 </Project>

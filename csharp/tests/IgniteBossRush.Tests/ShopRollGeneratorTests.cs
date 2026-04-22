@@ -22,10 +22,13 @@ namespace IgniteBossRush.Tests;
 ///   - Variability: different seeds → different fingerprints AND different
 ///     observable slot contents (catches the hypothetical bug where the RNG
 ///     factory is wired to ignore the seed).
-///   - Structure: 9 tiers × 11 slots in the locked W,W,W,T,T,T,A,A,A,Tear,Tear order.
+///   - Structure: 9 tiers × 7 slots in the locked W,W,T,T,A,A,Tear order.
 ///   - Within-tier uniqueness: no duplicate param_id within a single category
-///     of a single tier (Fisher–Yates without replacement contract).
-///   - Pool sized below minimum → loud failure (caught at BuildPlan time).
+///     of a single tier (falls out of the global-shuffle contract).
+///   - Global uniqueness across tiers per category: if Wild Strikes rolls
+///     into tier 2 it never reappears in tiers 3..9.
+///   - Pool sized below global-demand floor → loud failure (caught at
+///     BuildPlan time — the floor is perTier × TierCount, not perTier).
 /// </summary>
 public class ShopRollGeneratorTests
 {
@@ -92,7 +95,7 @@ public class ShopRollGeneratorTests
     }
 
     [Fact]
-    public void Generate_StructureMatchesLockedSpec_9Tiers_11Slots_3W3T3A2Tear()
+    public void Generate_StructureMatchesLockedSpec_9Tiers_7Slots_2W2T2A1Tear()
     {
         using var fx = new TempPoolFixture();
         fx.WriteDefaultPool();
@@ -103,7 +106,7 @@ public class ShopRollGeneratorTests
         }).Generate(Path.Combine(fx.Root, "out"));
 
         Assert.Equal(9, r.TierCount);
-        Assert.Equal(99, r.SlotCount);
+        Assert.Equal(63, r.SlotCount);
 
         using var doc = JsonDocument.Parse(File.ReadAllBytes(r.TierRewardsPath));
         var tiers = doc.RootElement.GetProperty("tiers").EnumerateArray().ToList();
@@ -128,16 +131,16 @@ public class ShopRollGeneratorTests
             Assert.Equal(1049308220 + tier, t.GetProperty("shard_award_event_flag").GetInt32());
             Assert.Equal(5, t.GetProperty("shard_award_count").GetInt32());
 
-            // 11 slots in fixed kind order. Cost always 1 amber shard.
+            // 7 slots in fixed kind order. Cost always 1 amber shard.
             var slots = t.GetProperty("slots").EnumerateArray().ToList();
-            Assert.Equal(11, slots.Count);
+            Assert.Equal(7, slots.Count);
             string[] expectedKinds = {
-                "weapon","weapon","weapon",
-                "talisman","talisman","talisman",
-                "ash_of_war","ash_of_war","ash_of_war",
-                "tear","tear",
+                "weapon","weapon",
+                "talisman","talisman",
+                "ash_of_war","ash_of_war",
+                "tear",
             };
-            for (int s = 0; s < 11; s++)
+            for (int s = 0; s < 7; s++)
             {
                 Assert.Equal(expectedKinds[s], slots[s].GetProperty("kind").GetString());
                 // shop_id encoding: 8000000 + tier*100 + slot
@@ -145,6 +148,131 @@ public class ShopRollGeneratorTests
                 Assert.Equal(1, slots[s].GetProperty("cost_amber_shards").GetInt32());
             }
         }
+    }
+
+    [Fact]
+    public void Generate_NoItemRepeatsAcrossTiers_PerCategory()
+    {
+        // Global uniqueness contract: once an item rolls into any tier's shop,
+        // it must never appear again in a later tier's shop for the same
+        // category. Implementation is a single Fisher–Yates shuffle per
+        // category sliced into contiguous per-tier chunks; this test is the
+        // trip wire if that gets refactored back to per-tier sampling.
+        using var fx = new TempPoolFixture();
+        fx.WriteDefaultPool();
+        var r = new ShopRollGenerator(new ShopRollGeneratorOptions
+        {
+            Seed = "global-uniqueness-check",
+            ShopPoolPath = fx.PoolPath,
+        }).Generate(Path.Combine(fx.Root, "g"));
+
+        using var doc = JsonDocument.Parse(File.ReadAllBytes(r.TierRewardsPath));
+        // Gather (kind, param_id) pairs across every tier/slot. Count per kind.
+        var perKindSeen = new Dictionary<string, List<int>>();
+        foreach (var tier in doc.RootElement.GetProperty("tiers").EnumerateArray())
+        foreach (var slot in tier.GetProperty("slots").EnumerateArray())
+        {
+            string kind = slot.GetProperty("kind").GetString()!;
+            int pid = slot.GetProperty("param_id").GetInt32();
+            if (!perKindSeen.TryGetValue(kind, out var list))
+                perKindSeen[kind] = list = new List<int>();
+            list.Add(pid);
+        }
+
+        foreach (var (kind, ids) in perKindSeen)
+            Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public void Generate_WithGreatRunes_BonusSlotIsProbabilistic_CostIsThreeShards()
+    {
+        // Great Rune bonus slot invariants:
+        //   (a) per-tier slot count ∈ {7, 8}
+        //   (b) if 8th slot exists it's kind="great_rune" and cost=3
+        //   (c) base 7 slots still cost 1 each (per-slot cost propagated)
+        //   (d) no rune appears in two tiers (global uniqueness)
+        //   (e) never more lucky tiers than runes in the pool (clamp rule)
+        using var fx = new TempPoolFixture();
+        // 5 runes in the pool matches production shop_pool.json. The 15%
+        // roll is seeded so we don't need a specific expected lucky count;
+        // we just check the invariants hold for whichever tiers won.
+        fx.WritePool(weaponCount: 40, talismanCount: 30, aowCount: 30,
+                     tearCount: 20, greatRuneCount: 5);
+
+        var r = new ShopRollGenerator(new ShopRollGeneratorOptions
+        {
+            Seed = "great-rune-check",
+            ShopPoolPath = fx.PoolPath,
+        }).Generate(Path.Combine(fx.Root, "gr"));
+
+        using var doc = JsonDocument.Parse(File.ReadAllBytes(r.TierRewardsPath));
+        var tiers = doc.RootElement.GetProperty("tiers").EnumerateArray().ToList();
+        Assert.Equal(9, tiers.Count);
+
+        var runeIdsSeen = new List<int>();
+        int luckyTierCount = 0;
+        int totalSlots = 0;
+
+        foreach (var tier in tiers)
+        {
+            int tierNum = tier.GetProperty("tier").GetInt32();
+            var slots = tier.GetProperty("slots").EnumerateArray().ToList();
+
+            // (a) per-tier count invariant
+            Assert.InRange(slots.Count, 7, 8);
+
+            // First 7 slots are always the base structure (same cost).
+            for (int s = 0; s < 7; s++)
+            {
+                Assert.NotEqual("great_rune", slots[s].GetProperty("kind").GetString());
+                // (c) base slots always cost 1 amber shard
+                Assert.Equal(1, slots[s].GetProperty("cost_amber_shards").GetInt32());
+            }
+
+            if (slots.Count == 8)
+            {
+                var rune = slots[7];
+                luckyTierCount++;
+                // (b) kind and cost
+                Assert.Equal("great_rune", rune.GetProperty("kind").GetString());
+                Assert.Equal(3, rune.GetProperty("cost_amber_shards").GetInt32());
+                // shop_id continues the 8000000 + tier*100 + slot scheme
+                Assert.Equal(8000000 + tierNum * 100 + 7, rune.GetProperty("shop_id").GetInt32());
+                runeIdsSeen.Add(rune.GetProperty("param_id").GetInt32());
+            }
+
+            totalSlots += slots.Count;
+        }
+
+        // (d) global uniqueness: all rune param_ids are distinct.
+        Assert.Equal(runeIdsSeen.Count, runeIdsSeen.Distinct().Count());
+
+        // (e) lucky count clamped to pool size (5 runes available).
+        Assert.InRange(luckyTierCount, 0, 5);
+
+        // Total slot count consistency: 63 base + lucky bonus.
+        Assert.Equal(63 + luckyTierCount, totalSlots);
+        Assert.Equal(totalSlots, r.SlotCount);
+    }
+
+    [Fact]
+    public void Generate_WithGreatRunes_DeterministicAcrossRuns()
+    {
+        // Same seed + same pool (including runes) → byte-identical output.
+        // Catches regression where the Great Rune RNG stream accidentally
+        // pulls from a shared mutable buffer.
+        using var fx = new TempPoolFixture();
+        fx.WritePool(weaponCount: 40, talismanCount: 30, aowCount: 30,
+                     tearCount: 20, greatRuneCount: 5);
+        var opts = new ShopRollGeneratorOptions
+        {
+            Seed = "great-rune-determinism",
+            ShopPoolPath = fx.PoolPath,
+        };
+        var r1 = new ShopRollGenerator(opts).Generate(Path.Combine(fx.Root, "a"));
+        var r2 = new ShopRollGenerator(opts).Generate(Path.Combine(fx.Root, "b"));
+        Assert.Equal(r1.Fingerprint, r2.Fingerprint);
+        Assert.Equal(r1.SlotCount, r2.SlotCount);
     }
 
     [Fact]
@@ -179,9 +307,9 @@ public class ShopRollGeneratorTests
     public void Generate_PoolBelowMinimumSize_ThrowsLoudly()
     {
         using var fx = new TempPoolFixture();
-        // Only 2 weapons in pool but spec needs 3 → should fail at BuildPlan,
-        // not silently emit a malformed plan.
-        fx.WritePool(weaponCount: 2, talismanCount: 3, aowCount: 3, tearCount: 2);
+        // Only 17 weapons in pool but global-uniqueness floor is 2 * 9 = 18
+        // → should fail at BuildPlan, not silently emit a malformed plan.
+        fx.WritePool(weaponCount: 17, talismanCount: 18, aowCount: 18, tearCount: 9);
 
         var ex = Assert.Throws<InvalidDataException>(() =>
             new ShopRollGenerator(new ShopRollGeneratorOptions
@@ -199,7 +327,7 @@ public class ShopRollGeneratorTests
         // Direct call into the in-memory builder — useful for downstream
         // callers (regulation patcher, EMEVD patcher) that want the plan
         // without touching disk. Same seed → identical canonical bytes.
-        var pool = MakePool(weaponCount: 5, talismanCount: 4, aowCount: 4, tearCount: 3);
+        var pool = MakePool(weaponCount: 20, talismanCount: 20, aowCount: 20, tearCount: 10);
         var p1 = ShopRollGenerator.BuildPlan("pure-fn-seed", pool);
         var p2 = ShopRollGenerator.BuildPlan("pure-fn-seed", pool);
 
@@ -212,7 +340,9 @@ public class ShopRollGeneratorTests
     // Fixture helpers
     // ------------------------------------------------------------------
 
-    private static ShopPoolFile MakePool(int weaponCount, int talismanCount, int aowCount, int tearCount)
+    private static ShopPoolFile MakePool(
+        int weaponCount, int talismanCount, int aowCount, int tearCount,
+        int greatRuneCount = 0)
     {
         return new ShopPoolFile
         {
@@ -228,6 +358,8 @@ public class ShopRollGeneratorTests
                     .Select(i => new AshOfWarPoolEntry { ParamId = 10000 + i * 100, Name = $"A{i}" }).ToList(),
                 CrystalTears = Enumerable.Range(0, tearCount)
                     .Select(i => new CrystalTearPoolEntry { ParamId = 10100 + i, Name = $"Tear{i}" }).ToList(),
+                GreatRunes = Enumerable.Range(0, greatRuneCount)
+                    .Select(i => new GreatRunePoolEntry { ParamId = 191 + i, Name = $"Rune{i}" }).ToList(),
             },
             Exclusions = new ShopExclusions(),
         };
@@ -246,11 +378,19 @@ public class ShopRollGeneratorTests
         }
 
         public void WriteDefaultPool() =>
-            WritePool(weaponCount: 8, talismanCount: 6, aowCount: 6, tearCount: 4);
+            // Sized generously above the 18/18/18/9 global-uniqueness floor so
+            // (a) floor-check passes, (b) two distinct seeds have combinatorially
+            // many distinct orderings (the variability test needs this).
+            // No great_runes by default — structure test asserts the
+            // baseline 7-slots-per-tier shape, and the new-feature test
+            // (Generate_WithGreatRunes_...) overrides this explicitly.
+            WritePool(weaponCount: 40, talismanCount: 30, aowCount: 30, tearCount: 20);
 
-        public void WritePool(int weaponCount, int talismanCount, int aowCount, int tearCount)
+        public void WritePool(
+            int weaponCount, int talismanCount, int aowCount, int tearCount,
+            int greatRuneCount = 0)
         {
-            var pool = MakePool(weaponCount, talismanCount, aowCount, tearCount);
+            var pool = MakePool(weaponCount, talismanCount, aowCount, tearCount, greatRuneCount);
             // Use System.Text.Json for fixture writing — we don't need
             // canonical bytes for the input, only for the output we compare.
             var poolDict = new
@@ -271,12 +411,16 @@ public class ShopRollGeneratorTests
                     crystal_tears = pool.Pools.CrystalTears.Select(c => new {
                         equipParamGoods_id = c.ParamId, name = c.Name
                     }).ToArray(),
+                    great_runes = pool.Pools.GreatRunes.Select(r => new {
+                        equipParamGoods_id = r.ParamId, name = r.Name
+                    }).ToArray(),
                 },
                 exclusions = new {
                     weapons = Array.Empty<int>(),
                     talismans = Array.Empty<int>(),
                     ash_of_war = Array.Empty<int>(),
                     crystal_tears = Array.Empty<int>(),
+                    great_runes = Array.Empty<int>(),
                 },
             };
             File.WriteAllText(PoolPath, JsonSerializer.Serialize(poolDict));

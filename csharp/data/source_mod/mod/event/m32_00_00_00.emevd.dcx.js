@@ -4,7 +4,7 @@
 // @game    Sekiro
 // @string    "N:\\GR\\data\\Param\\event\\common_func.emevd\u0000N:\\GR\\data\\Param\\event\\common_macro.emevd\u0000\u0000\u0000\u0000\u0000\u0000"
 // @linked    [0,82]
-// @version    3.5
+// @version    3.6.2
 // ==/EMEVD==
 
 // コンストラクタ -- constructor
@@ -24,6 +24,8 @@ $Event(0, Default, function() {
     $InitializeEvent(3, 32002250, 32000205, 30002, 20002, 16574, 0, 0, 0, 0, 0, 32001205, 0, 0, 0, 32000205);
     $InitializeEvent(3, 32002270, 32000205, 30005, 20005, 32000205, 3, 0, 0, 1, 0, 0);
     $InitializeEvent(4, 32002250, 32000206, 30000, 20000, 16572, 0, 0, 0, 0, 0, 32001206, 0, 0, 0, 32000206);
+    // Open the Scaly Door
+    SetEventFlagID(32000590, ON);
     $InitializeEvent(4, 32002270, 32000206, 30006, 20006, 32000206, 3, 0, 0, 1, 0, 0);
     $InitializeEvent(5, 32002250, 32000215, 30000, 20000, 16572, 0, 0, 0, 0, 0, 32001215, 0, 0, 0, 32000215);
     $InitializeEvent(5, 32002270, 32000215, 30006, 20006, 32000215, 3, 0, 0, 1, 0, 0);

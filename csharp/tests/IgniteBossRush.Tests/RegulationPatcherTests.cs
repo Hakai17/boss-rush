@@ -104,10 +104,10 @@ public class RegulationPatcherTests
 
     [Theory]
     [InlineData(1, 0, 8000100)]
-    [InlineData(1, 10, 8000110)]
-    [InlineData(5, 5, 8000505)]
+    [InlineData(1, 6, 8000106)]
+    [InlineData(5, 3, 8000503)]
     [InlineData(9, 0, 8000900)]
-    [InlineData(9, 10, 8000910)]
+    [InlineData(9, 6, 8000906)]
     public void ShopLineupRowId_UsesBasePlusTierStridePlusSlotIndex(int tier, int slot, int expected)
     {
         Assert.Equal(expected, RegulationConstants.ShopLineupRowId(tier, slot));
@@ -117,7 +117,8 @@ public class RegulationPatcherTests
     [InlineData(0, 0)]         // below FirstTier
     [InlineData(10, 0)]        // above LastTier
     [InlineData(1, -1)]        // slot below range
-    [InlineData(1, 11)]        // slot above range (0..10 = 11 slots)
+    [InlineData(1, 8)]         // slot above range (0..7 inclusive — index 7 is
+                               // the Great Rune bonus slot, index 8 is out)
     public void ShopLineupRowId_OutOfRange_Throws(int tier, int slot)
     {
         Assert.Throws<ArgumentOutOfRangeException>(
@@ -214,32 +215,56 @@ public class RegulationPatcherTests
         RegulationPatcher.ValidatePlan(plan); // should not throw
     }
 
-    [Fact]
-    public void ValidatePlan_RejectsCostGreaterThanOne()
+    [Theory]
+    [InlineData(0)]    // below min — zero-cost slots would be free, a bug
+    [InlineData(-1)]   // negative cost is nonsensical
+    [InlineData(100)]  // above max — merchant UI can't render 3+ digit prices
+    [InlineData(9999)] // well above max
+    public void ValidatePlan_RejectsCostOutOfRange(int badCost)
     {
-        // The locked spec is exactly 1 shard per slot. If a future plan
-        // bumps that up, the ShopLineupParam barter mechanism can't charge
-        // N units — ValidatePlan must fail loud rather than quietly
-        // under-charge players.
+        // Accepted range is [1, 99]. Great Rune slots use 3, base slots
+        // use 1, and that's the production usage. This test pins the
+        // boundary so a future spec change (e.g. 500-shard runes) has to
+        // update both the constants and this assertion.
         var plan = MakeMinimalPlan();
         plan.Tiers[0].Slots[0] = new ShopSlot
         {
             ShopId = plan.Tiers[0].Slots[0].ShopId,
             Kind = plan.Tiers[0].Slots[0].Kind,
             ParamId = plan.Tiers[0].Slots[0].ParamId,
-            CostAmberShards = 2,
+            CostAmberShards = badCost,
         };
         Assert.Throws<NotSupportedException>(() => RegulationPatcher.ValidatePlan(plan));
+    }
+
+    [Theory]
+    [InlineData(1)]   // baseline base-slot cost
+    [InlineData(3)]   // Great Rune cost
+    [InlineData(99)]  // upper bound
+    public void ValidatePlan_AcceptsCostInRange(int goodCost)
+    {
+        var plan = MakeMinimalPlan();
+        plan.Tiers[0].Slots[0] = new ShopSlot
+        {
+            ShopId = plan.Tiers[0].Slots[0].ShopId,
+            Kind = plan.Tiers[0].Slots[0].Kind,
+            ParamId = plan.Tiers[0].Slots[0].ParamId,
+            CostAmberShards = goodCost,
+        };
+        RegulationPatcher.ValidatePlan(plan); // should not throw
     }
 
     [Fact]
     public void ValidatePlan_RejectsTierWithWrongSlotCount()
     {
         var plan = MakeMinimalPlan();
-        plan.Tiers[0].Slots.RemoveAt(0); // 10 slots instead of 11
+        plan.Tiers[0].Slots.RemoveAt(0); // 6 slots — below min (7), should reject
         var ex = Assert.Throws<ArgumentException>(() => RegulationPatcher.ValidatePlan(plan));
         Assert.Contains("tier 1", ex.Message);
-        Assert.Contains("11 slots", ex.Message);
+        // Error message advertises both the baseline (7) and bonus (8) counts
+        // so a reader knows why 6 is rejected AND why 8 is allowed.
+        Assert.Contains("7", ex.Message);
+        Assert.Contains("8", ex.Message);
     }
 
     [Fact]
@@ -348,8 +373,8 @@ public class RegulationPatcherTests
     }
 
     /// <summary>
-    /// Builds a minimal valid 9-tier × 11-slot plan. Shop kinds match the
-    /// locked layout (3 weapons, 3 talismans, 3 AoW, 2 tears), param ids
+    /// Builds a minimal valid 9-tier × 7-slot plan. Shop kinds match the
+    /// locked layout (2 weapons, 2 talismans, 2 AoW, 1 tear), param ids
     /// are deterministic placeholders, flags follow the
     /// <see cref="TierClearConstants"/> base+tier scheme.
     /// </summary>
@@ -361,10 +386,10 @@ public class RegulationPatcherTests
             var slots = new List<ShopSlot>();
             string[] kinds = new[]
             {
-                "weapon", "weapon", "weapon",
-                "talisman", "talisman", "talisman",
-                "ash_of_war", "ash_of_war", "ash_of_war",
-                "tear", "tear",
+                "weapon", "weapon",
+                "talisman", "talisman",
+                "ash_of_war", "ash_of_war",
+                "tear",
             };
             for (int s = 0; s < kinds.Length; s++)
             {

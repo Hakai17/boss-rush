@@ -4,7 +4,7 @@
 // @game    Sekiro
 // @string    "N:\\GR\\data\\Param\\event\\common_func.emevd\u0000N:\\GR\\data\\Param\\event\\common_macro.emevd\u0000\u0000\u0000\u0000\u0000\u0000"
 // @linked    [0,82]
-// @version    3.5
+// @version    3.6.2
 // ==/EMEVD==
 
 // コンストラクタ -- constructor
@@ -20,6 +20,8 @@ $Event(0, Default, function() {
     $InitializeCommonEvent(0, 90005646, 32080800, 32082840, 32082841, 32081840, 32082840, 32, 8, 0, 0);
     $InitializeEvent(0, 32082650);
     $InitializeCommonEvent(0, 900005610, 32081680, 100, 800, 0);
+    //Open Fallingstar Beast's Doors
+    SetEventFlagID(32088590, ON);
     $InitializeEvent(0, 32082200, 32080200, 30005, 20005, 0, 0, 0, 0, 0, 32081600, 32081601, 32081602, 0);
     $InitializeEvent(1, 32082200, 32080201, 30001, 20001, 0, 0, 0, 0, 0, 32081603, 0, 0, 0);
     $InitializeEvent(2, 32082200, 32080202, 30001, 20001, 0, 0, 0, 0, 0, 32081604, 32081605, 0, 0);
@@ -228,4 +230,3 @@ $Event(32082849, Restart, function() {
     $InitializeCommonEvent(0, 9005811, 32080800, 32081800, 7, 32080801);
     $InitializeCommonEvent(0, 9005822, 32080800, 920800, 32082805, 32082806, 0, 32082802, 0, 0);
 });
-

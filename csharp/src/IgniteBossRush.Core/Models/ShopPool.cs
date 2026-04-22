@@ -9,10 +9,12 @@ namespace IgniteBossRush.Core.Models;
 /// items eligible to appear in Merchant Kalé's per-tier Boss Rush shop.
 ///
 /// Four pools are sampled independently: weapons, talismans, ashes of war,
-/// and crystal tears. Per the locked spec each tier's shop has 11 slots
-/// arranged W,W,W, T,T,T, A,A,A, Tear,Tear (3+3+3+2). Drawn deterministically
-/// from <see cref="ShakeDeterministicRng"/> using domain tag
-/// <c>"kale_shop_tier_N"</c> per tier.
+/// and crystal tears. Per the locked spec each tier's shop has 7 slots
+/// arranged W,W, T,T, A,A, Tear (2+2+2+1). Drawn deterministically from
+/// <see cref="ShakeDeterministicRng"/> using a per-category domain tag
+/// (<c>"kale_shop_tier_weapons"</c>, <c>"..._talismans"</c>, etc.). Sampling
+/// is without-replacement GLOBALLY across all 9 tiers per category, so once
+/// an item rolls into one tier's shop it never reappears in a later tier.
 ///
 /// Field ordering inside each list is load-bearing: it controls the
 /// permutation index the SHAKE-256 PRNG resolves against, so two competitions
@@ -47,6 +49,15 @@ public sealed class ShopPools
 
     [JsonPropertyName("crystal_tears")]
     public List<CrystalTearPoolEntry> CrystalTears { get; set; } = new();
+
+    /// <summary>
+    /// Activated Great Runes (goods IDs 191..195 in vanilla ER). Sampled
+    /// probabilistically — each tier has a <see cref="Generation.ShopRollGenerator.GreatRuneChancePercent"/>%
+    /// chance of getting a bonus 8th slot containing one rune from this
+    /// pool. Empty by default; populating this list enables the feature.
+    /// </summary>
+    [JsonPropertyName("great_runes")]
+    public List<GreatRunePoolEntry> GreatRunes { get; set; } = new();
 }
 
 public sealed class ShopExclusions
@@ -62,6 +73,9 @@ public sealed class ShopExclusions
 
     [JsonPropertyName("crystal_tears")]
     public List<int> CrystalTears { get; set; } = new();
+
+    [JsonPropertyName("great_runes")]
+    public List<int> GreatRunes { get; set; } = new();
 }
 
 public sealed class WeaponPoolEntry
@@ -97,6 +111,20 @@ public sealed class AshOfWarPoolEntry
 
 public sealed class CrystalTearPoolEntry
 {
+    [JsonPropertyName("equipParamGoods_id")]
+    public int ParamId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+}
+
+public sealed class GreatRunePoolEntry
+{
+    /// <summary>EquipParamGoods row id of the <b>activated</b> Great Rune
+    /// (191..195 in vanilla ER — <c>goodsType=15</c>, what the game places
+    /// in the Great Rune inventory slot). Do NOT use the 8148..8153 range
+    /// here — those are the pre-Divine-Tower "unactivated" variants that
+    /// get consumed during the activation ritual.</summary>
     [JsonPropertyName("equipParamGoods_id")]
     public int ParamId { get; set; }
 

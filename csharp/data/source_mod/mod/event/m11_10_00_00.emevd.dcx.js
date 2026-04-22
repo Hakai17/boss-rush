@@ -127,6 +127,15 @@ $Event(0, Default, function() {
     $InitializeEvent(0, 11107845); //check boss items obtained
     $InitializeEvent(0, 11107846); //apply difficulty change
     $InitializeEvent(0, 11109999); //existing character check
+    
+    $InitializeEvent(0, 11100050, 1049304100, 1049304105, 1049304110, 1049304114, 1049304120, 1036490011);
+    $InitializeEvent(1, 11100050, 1049304124, 1049304125, 1049304129, 1049304136, 1049304131, 1036490021);
+    $InitializeEvent(2, 11100050, 1049304147, 1049304138, 1049304143, 1049304154, 1049304155, 1036490031);
+    $InitializeEvent(3, 11100050, 1049304150, 1049304149, 1049304161, 1049304214, 1049304188, 1036490041);
+    $InitializeEvent(4, 11100050, 1049304180, 1049304184, 1049304218, 1049304216, 1049304217, 1036490051);
+    $InitializeEvent(5, 11100050, 1049304208, 1049304205, 1049304222, 1049304223, 1049304231, 1036490061);
+    $InitializeEvent(6, 11100050, 1049304227, 1049304225, 1049304234, 1049304238, 1049304248, 1036490071);
+    $InitializeEvent(7, 11100050, 1049304247, 1049304239, 1049304244, 1049304242, 1049304249, 1036490081);
 });
 
 // プリコンストラクタ -- preconstructor
@@ -138,6 +147,18 @@ $Event(50, Default, function() {
     SetCharacterBackreadState(14000700, true);
     EnableAssetInvunerability(11101715);
     EnableAssetInvunerability(11101730);
+});
+
+$Event(11100050, Default, function(boss1, boss2, boss3, boss4, boss5, itemLot) {
+    
+    EndIf(ThisEventSlot());
+    
+    WaitFor(EventFlag(boss1) && EventFlag(boss2) && EventFlag(boss3) && EventFlag(boss4) && EventFlag(boss5));
+    
+    AwardItemLot(itemLot);
+    
+    SetThisEventSlot(ON);
+    
 });
 
 //on demand character initialization
@@ -1214,8 +1235,6 @@ $Event(11107705, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 5);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1241,8 +1260,6 @@ $Event(11107706, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1256,6 +1273,7 @@ $Event(11107707, Default, function() {
     if (EventFlag(1049304155)) {
         DisplayBlinkingMessage(2081002);
         SetEventFlagID(1049304317, ON);
+        SetEventFlagID(1049300008, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1267,8 +1285,6 @@ $Event(11107707, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1282,6 +1298,7 @@ $Event(11107708, Default, function() {
     if (EventFlag(1049304188)) {
         DisplayBlinkingMessage(2081003);
         SetEventFlagID(1049304318, ON);
+        SetEventFlagID(1049300009, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1293,8 +1310,6 @@ $Event(11107708, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1308,6 +1323,7 @@ $Event(11107709, Default, function() {
     if (EventFlag(1049304217)) {
         DisplayBlinkingMessage(2081004);
         SetEventFlagID(1049304319, ON);
+        SetEventFlagID(1049300010, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1319,8 +1335,6 @@ $Event(11107709, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1334,6 +1348,7 @@ $Event(11107710, Default, function() {
     if (EventFlag(1049304231)) {
         DisplayBlinkingMessage(2081005);
         SetEventFlagID(1049304320, ON);
+        SetEventFlagID(1049300011, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1345,8 +1360,6 @@ $Event(11107710, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1360,6 +1373,7 @@ $Event(11107711, Default, function() {
     if (EventFlag(1049304248)) {
         DisplayBlinkingMessage(2081006);
         SetEventFlagID(1049304321, ON);
+        SetEventFlagID(1049300012, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1371,8 +1385,6 @@ $Event(11107711, Default, function() {
         SetEventFlagID(1049308408, ON);
         SetEventFlagID(1049308409, OFF);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)
@@ -1387,6 +1399,7 @@ $Event(11107701, Default, function() {
         DisplayBlinkingMessage(2081007);
         SetEventFlagID(1049304322, ON);
         SetEventFlagID(1049304322, ON);
+        SetEventFlagID(1049300013, ON);
         // For Kale's Shop
         SetEventFlagID(1049308401, OFF);
         SetEventFlagID(1049308402, OFF);
@@ -1398,8 +1411,6 @@ $Event(11107701, Default, function() {
         SetEventFlagID(1049308408, OFF);
         SetEventFlagID(1049308409, ON);
         // Give the player Starlight Shards
-        DirectlyGivePlayerItem(ItemType.Goods, 10010, 6001, 2)
-        DirectlyGivePlayerItem(ItemType.Goods, 10020, 6001, 1)
         RemoveItemFromPlayer(ItemType.Goods, 1290, 3);
         for (let i = 0; i < 3; i++)
             DirectlyGivePlayerItem(ItemType.Goods, 1290, 6001, 1)

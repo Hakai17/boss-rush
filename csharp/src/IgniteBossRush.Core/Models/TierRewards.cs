@@ -78,4 +78,10 @@ public static class ShopSlotKinds
     public const string Talisman = "talisman";
     public const string AshOfWar = "ash_of_war";
     public const string Tear = "tear";
+    /// <summary>Bonus 8th-slot kind for per-tier activated Great Runes.
+    /// Only appears when the tier wins the probabilistic roll (see
+    /// <see cref="Generation.ShopRollGenerator.GreatRuneChancePercent"/>).
+    /// Maps to <see cref="Patching.RegulationConstants.ShopEquipTypeGoods"/> (3)
+    /// in ShopLineupParam.</summary>
+    public const string GreatRune = "great_rune";
 }

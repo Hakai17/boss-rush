@@ -133,8 +133,11 @@ public class KaleShopMenuSplicerTests
             int expectedStart = RegulationConstants.ShopLineupRowBase
                 + tier * RegulationConstants.ShopLineupTierStride;
             Assert.Equal(expectedStart, entry.ShopStartRow);
+            // Range includes the optional Great Rune slot at index
+            // ShopSlotsPerTier (row shopBase + 7). See KaleShopMenuSplicer
+            // for rationale.
             Assert.Equal(
-                expectedStart + RegulationConstants.ShopSlotsPerTier - 1,
+                expectedStart + RegulationConstants.ShopSlotsPerTier,
                 entry.ShopEndRow);
         }
     }
@@ -226,14 +229,21 @@ public class KaleShopMenuSplicerTests
             Assert.True(group.ContainsKey(stateId), $"missing new state {stateId}");
 
             var state = group[stateId];
-            Assert.Equal(2, state.EntryCommands.Count);
+            // Tier shop state layout mirrors Athena's Moonwalk Starlight
+            // Shop state 4: ONLY OpenPuppetShop on EntryCommands, no
+            // ShowShopMessage prefix, and the exit condition uses the
+            // puppet-shop-flavoured menu-closed evaluator.
+            Assert.Equal(1, state.EntryCommands.Count);
             Assert.Equal(1, state.EntryCommands[0].CommandBank);
-            Assert.Equal(10, state.EntryCommands[0].CommandID); // ShowShopMessage
-            Assert.Equal(22, state.EntryCommands[1].CommandID); // OpenRegularShop
+            Assert.Equal(144, state.EntryCommands[0].CommandID); // OpenPuppetShop
 
             var cond = Assert.Single(state.Conditions);
             Assert.Equal((long?)KaleShopMenuSplicer.BackToClearStateId, cond.TargetState);
-            Assert.Equal(FakeMenuClosedEvaluator, cond.Evaluator);
+            // Exit evaluator is the puppet-shop-flavoured predicate from
+            // EsdBytecode.PuppetShopMenuClosedEvaluator, cloned so each
+            // tier state owns its own byte array.
+            Assert.Equal(EsdBytecode.PuppetShopMenuClosedEvaluator, cond.Evaluator);
+            Assert.NotSame(EsdBytecode.PuppetShopMenuClosedEvaluator, cond.Evaluator);
         }
     }
 
@@ -263,16 +273,18 @@ public class KaleShopMenuSplicerTests
         var esd = BuildFakeKaleEsd();
         var result = KaleShopMenuSplicer.Apply(esd);
 
-        // For every adjacent pair, the gap must be exactly 100 - 11 = 89
-        // (ShopLineupTierStride - ShopSlotsPerTier). A regression that, say,
-        // set stride=11 would make tiers overlap their neighbours.
+        // For every adjacent pair, the gap must be exactly
+        //   ShopLineupTierStride - ShopSlotsPerTier = 100 - 7 = 93
+        // (the shop range spans 8 IDs now — 7 base slots plus the optional
+        // Great Rune slot at index 7 — and tiers are 100 apart). A
+        // regression that, say, set stride=11 would make tiers overlap.
         for (int i = 1; i < result.TierEntries.Count; i++)
         {
             int prevEnd  = result.TierEntries[i - 1].ShopEndRow;
             int nextStart = result.TierEntries[i].ShopStartRow;
             Assert.True(nextStart > prevEnd, $"tier {i} overlaps tier {i - 1}");
             Assert.Equal(
-                RegulationConstants.ShopLineupTierStride - RegulationConstants.ShopSlotsPerTier + 1,
+                RegulationConstants.ShopLineupTierStride - RegulationConstants.ShopSlotsPerTier,
                 nextStart - prevEnd);
         }
     }

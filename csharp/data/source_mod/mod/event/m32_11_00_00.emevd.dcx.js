@@ -4,7 +4,7 @@
 // @game    Sekiro
 // @string    "N:\\GR\\data\\Param\\event\\common_func.emevd\u0000N:\\GR\\data\\Param\\event\\common_macro.emevd\u0000\u0000\u0000\u0000\u0000\u0000"
 // @linked    [0,82]
-// @version    3.5
+// @version    3.6.2
 // ==/EMEVD==
 
 // コンストラクタ -- constructor
@@ -33,6 +33,9 @@ $Event(0, Default, function() {
     $InitializeEvent(0, 32112510);
     $InitializeCommonEvent(0, 90005501, 32110510, 32110511, 0, 32111510, 32111511, 32111512, 32110512);
     $InitializeEvent(0, 32112580);
+    //Open Astel's Doors
+    SetEventFlagID(32118560, ON);
+    SetEventFlagID(32110590, ON);
     $InitializeCommonEvent(0, 90005511, 32110560, 32111550, 32113560, 257013, 0);
     $InitializeCommonEvent(0, 90005512, 32110560, 32112550, 32112551);
     $InitializeCommonEvent(0, 90005646, 32110800, 32112840, 32112841, 32111840, 32112840, 32, 11, 0, 0);
@@ -161,4 +164,3 @@ $Event(32112849, Restart, function() {
     $InitializeCommonEvent(0, 9005811, 32110800, 32111800, 7, 32110801);
     $InitializeCommonEvent(0, 9005822, 32110800, 920700, 32112805, 32112806, 0, 32112802, 0, 0);
 });
-

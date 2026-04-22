@@ -4,7 +4,7 @@
 // @game    Sekiro
 // @string    ""
 // @linked    []
-// @version    3.6.1
+// @version    3.6.2
 // ==/EMEVD==
 
 // コンストラクタ -- constructor
@@ -695,6 +695,13 @@ $Event(50, Default, function() {
     $InitializeEvent(0, 4626, 2051459200);
     $InitializeEvent(0, 4627, 2049449200, 2049449203);
     InitializeEvent(0, 4852, 0);
+    //Activating Great Runes
+    SetEventFlagID(280, OFF);
+    SetEventFlagID(191, ON); // Godrick's Great Rune activated
+    SetEventFlagID(192, ON); // Radahn's Great Rune activated
+    SetEventFlagID(193, ON); // Morgott's Great Rune activated
+    SetEventFlagID(194, ON); // Rykard's Great Rune activated
+    SetEventFlagID(195, ON); // Mohg's Great Rune activated
     if (EventFlag(6010) && !EventFlag(100)) {
         SetEventFlagID(6010, OFF);
     }

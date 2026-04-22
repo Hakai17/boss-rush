@@ -24,6 +24,11 @@ public static class RegulationConstants
     public const string ItemLotParamMapPath = @"N:\GR\data\Param\param\GameParam\ItemLotParam_map.param";
     public const string ItemLotParamEnemyPath = @"N:\GR\data\Param\param\GameParam\ItemLotParam_enemy.param";
     public const string ShopLineupParamPath = @"N:\GR\data\Param\param\GameParam\ShopLineupParam.param";
+    // EquipMtrlSetParam path is kept as a constant for diagnostic tooling
+    // (inspect-regulation can dump its rows to help future research into
+    // the "for N runes" UI-label bug), but the patcher itself no longer
+    // mutates this table — see ShopCostTypeStarlightShards below.
+    public const string EquipMtrlSetParamPath = @"N:\GR\data\Param\param\GameParam\EquipMtrlSetParam.param";
 
     /// <summary>
     /// Short basenames (no path, no extension) of the PARAM files this patcher
@@ -80,9 +85,9 @@ public static class RegulationConstants
     /// <see cref="ShopLineupRowBase"/>.</summary>
     public const int ShopLineupTierStride = 100;
 
-    /// <summary>11 slots per tier: 3 weapons + 3 talismans + 3 AoW + 2 tears.
+    /// <summary>7 slots per tier: 2 weapons + 2 talismans + 2 AoW + 1 tear.
     /// Matches <see cref="Models.TierPlan.Slots"/>.Count invariant.</summary>
-    public const int ShopSlotsPerTier = 11;
+    public const int ShopSlotsPerTier = 7;
 
     /// <summary>ShopType byte value for Kalé's goods/wares entries. Vanilla ER
     /// uses 0 for "standard merchant goods". Gems (Ashes of War) and weapons
@@ -92,13 +97,37 @@ public static class RegulationConstants
 
     /// <summary>
     /// <c>costType</c> enum value (SHOP_LINEUP_COSTTYPE) for
-    /// <b>Starlight Shards</b>. The ER engine hardcodes this currency's
-    /// goods id internally — setting <c>costType=2</c> makes the shop
-    /// deduct Starlight Shards (<see cref="AmberShardGoodsId"/> = 1290) on
-    /// purchase without us needing to wire <c>mtrlId</c>. Athena
-    /// Randomizer's DLC starlight-shop uses the same value; see
-    /// <c>RandomizerServiceDlc.cs</c> (field
-    /// <c>starlightShardCostType = 2</c>).
+    /// <b>Starlight Shards</b>. Setting <c>costType=2</c> makes the engine
+    /// deduct Starlight Shards (<see cref="AmberShardGoodsId"/> = 1290)
+    /// on purchase in lieu of runes. Athena Randomizer's
+    /// <c>RandomizerServiceDlc.cs</c> uses the same value
+    /// (<c>starlightShardCostType = 2</c>).
+    ///
+    /// <para>
+    /// <b>Known cosmetic bug — engine limitation.</b> The purchase
+    /// dialog always reads "for N runes" even when shards are actually
+    /// being deducted. Investigation trail:
+    /// <list type="bullet">
+    ///   <item><b>mtrlId barter</b> — wiring each row's <c>mtrlId</c>
+    ///     to an EquipMtrlSetParam row consuming 1× Starlight Shards
+    ///     made the label read "for 0 runes" (OpenRegularShop ignores
+    ///     <c>mtrlId</c>). Barter UI appears only for a different
+    ///     shop-invocation opcode.</item>
+    ///   <item><b>menuTitleMsgId = 508000</b> — discovered in Athena
+    ///     Randomizer's Moonwalk Starlight Shop rows. Sets the shop's
+    ///     MENU TITLE (not the cost label). Without Athena's
+    ///     custom-shipped menu FMG entry, our title renders as
+    ///     "?MenuText?" placeholder. Even with the FMG entry, only the
+    ///     title changes — the "for N runes" dialog is unaffected.
+    ///     Athena has the same label text in-game; they just
+    ///     customized the title.</item>
+    ///   <item><b>FMG string override</b> — the "for %d runes" message
+    ///     could be globally replaced with "for %d Starlight Shards",
+    ///     but that affects every shop in the game. Requires
+    ///     FMG-patching infrastructure not currently in the pipeline.</item>
+    /// </list>
+    /// Status: pinned. Shard deduction works; only the label is wrong.
+    /// </para>
     /// </summary>
     public const byte ShopCostTypeStarlightShards = 2;
 
@@ -127,6 +156,127 @@ public static class RegulationConstants
     /// count), but the locked spec is 1; loosening the validator is a
     /// one-line change when/if the spec changes.</summary>
     public const int ShopCostPerSlotAmberShards = 1;
+
+    // ---- EquipMtrlSetParam (diagnostic / future barter work) ----------
+    /// <summary>Paramdef XML filename for <c>EquipMtrlSetParam.param</c>.
+    /// The patcher does NOT mutate this table today — the constant is
+    /// exposed so the <c>inspect-regulation</c> CLI can dump barter rows.
+    /// Kept as a future-research hook.</summary>
+    public const string EquipMtrlSetParamDefXml = "EquipMtrlSetParam.xml";
+
+    // ---- Boss Rush per-row stock-tracking flags -----------------------
+    /// <summary>
+    /// Base event flag for per-row "has been purchased" state tracking on
+    /// the Boss Rush shop rows. Each shop row's <c>eventFlag_forStock</c>
+    /// field is set to <c>Base + (tier-1)*100 + slotIndex*10</c>, giving
+    /// each of the 63 base slots + 9 Great Rune slots a unique flag with
+    /// a stride of 10 between adjacent slots:
+    /// <code>
+    /// tier 1 slot 0 = 1049308500    tier 9 slot 7 = 1049309370
+    /// </code>
+    ///
+    /// <para>
+    /// <b>Why the stride-10 layout.</b> Empirically, OpenPuppetShop's
+    /// "row purchased" write doesn't just flip the row's own
+    /// <c>eventFlag_forStock</c> — it affects a <i>range</i> of flags
+    /// around that value. With stride-1 spacing (our previous layout,
+    /// 500/501/502/…), buying slot N made slot N±1 read as sold-out too,
+    /// because the blast radius of the purchase write overlapped the
+    /// neighbouring row's stock flag. Athena Randomizer's Moonwalk
+    /// Starlight Shop rows solve this by spacing stock flags by 10 —
+    /// e.g. Moonveil at 1056457000, next weapon at 1056457010, next at
+    /// 1056457020 — and we mirror that pattern here.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Why needed at all.</b> OpenPuppetShop (bank=1 id=144 — Athena's
+    /// Moonwalk Starlight Shop opcode) evaluates each row's
+    /// <c>eventFlag_forStock</c> to decide if the row is available. When
+    /// the flag is ON the row reads as "already purchased" and is hidden.
+    /// If the field is left at <c>0</c> the engine probes flag 0 (a
+    /// system flag typically ON at runtime), so every row reads as
+    /// sold-out and the shop menu silently refuses to open. Athena works
+    /// around this by pointing each row at an existing vanilla
+    /// "received this item" flag; we allocate a fresh Ignite-Rush range
+    /// (flags start OFF → rows are available).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Range-safety.</b> The allocated window is 1049308500..1049309370.
+    /// The first 500 flags (1049308500..1049308999) sit inside the mod's
+    /// init-event wipe <c>BatchSetEventFlags(1049308400, 1049308999, OFF)</c>
+    /// and auto-reset on game-load. The overflow window
+    /// (1049309000..1049309370, used by tiers 6..9) requires the mod's
+    /// init wipe to be extended upstream — this is an EMEVD edit the
+    /// project owner applies manually; if the wipe is not extended, rows
+    /// in the overflow window keep their sold-out state across runs.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Side effect.</b> Once a slot is purchased, its flag flips ON
+    /// and the row becomes sold-out for the rest of the run — consistent
+    /// with the rest of Kalé's one-shot shop categories and with vanilla
+    /// Starlight Shop rows in Athena's setup.
+    /// </para>
+    /// </summary>
+    public const int BossRushShopStockFlagBase = 1049308500;
+
+    /// <summary>
+    /// Per-slot stock-tracking flag: <c>BossRushShopStockFlagBase +
+    /// (tier-1)*100 + slotIndex*10</c>. Tier in [1..9], slotIndex in
+    /// [0..<see cref="ShopSlotsPerTier"/>] inclusive (index 7 covers the
+    /// optional Great Rune bonus slot). Stride-10 between adjacent slots
+    /// keeps each row's purchase-write blast radius disjoint; see the
+    /// <see cref="BossRushShopStockFlagBase"/> remarks for the full
+    /// rationale.
+    /// </summary>
+    public static uint BossRushShopStockFlag(int tier, int slotIndex)
+    {
+        if (tier < TierClearConstants.FirstTier || tier > TierClearConstants.LastTier)
+            throw new ArgumentOutOfRangeException(nameof(tier));
+        if (slotIndex < 0 || slotIndex > ShopSlotsPerTier)
+            throw new ArgumentOutOfRangeException(nameof(slotIndex));
+        return (uint)(BossRushShopStockFlagBase + (tier - 1) * 100 + slotIndex * 10);
+    }
+
+    // ---- Boss Rush shop window title (menu FMG) -----------------------
+    /// <summary>
+    /// Per-tier menu title base. Tier N's shop window title uses
+    /// <c>BossRushShopTitleMsgIdBase + N</c> (508001..508009), pointing
+    /// at FMG entries added to <c>GR_MenuText.fmg</c> inside
+    /// <c>menu_dlc02.msgbnd.dcx</c> by
+    /// <see cref="FmgPatcher"/>. Numeric range 508001..508009 was
+    /// picked adjacent to Athena Randomizer's 508000 ("Starlight
+    /// Shop") so a side-by-side mod wouldn't collide.
+    /// </summary>
+    public const int BossRushShopTitleMsgIdBase = 508000;
+
+    /// <summary>Name of the FMG file INSIDE <c>menu_dlc02.msgbnd.dcx</c>
+    /// that holds generic menu-title text. Athena uses this file for
+    /// its "Starlight Shop" entry; we add the "Boss Rush - Tier N"
+    /// entries alongside.</summary>
+    public const string BossRushShopTitleFmgName = "GR_MenuText";
+
+    /// <summary>Filename (basename) of the msgbnd.dcx bundle the
+    /// <see cref="FmgPatcher"/> mutates. Shipped per-language under
+    /// <c>source_mod/mod/msg/&lt;lang&gt;/</c>; we patch only the
+    /// English (<c>engus</c>) variant today — non-English players
+    /// will see the default "Purchase Item" chrome.</summary>
+    public const string MenuMsgBndBaseName = "menu_dlc02.msgbnd.dcx";
+
+    /// <summary>Per-tier menu title text template. Runs
+    /// <c>string.Format(..., N)</c> with the 1-indexed tier number.</summary>
+    public const string BossRushShopTitleFormat = "Boss Rush - Tier {0}";
+
+    /// <summary>
+    /// Tier's shop window title message ID. Written into every
+    /// ShopLineupParam row for that tier's <c>menuTitleMsgId</c>,
+    /// corresponding 1:1 to a GR_MenuText.fmg entry the
+    /// <see cref="FmgPatcher"/> adds.
+    /// </summary>
+    public static int BossRushShopTitleMsgId(int tier) =>
+        BossRushShopTitleMsgIdBase + tier;
+
 
     // ---- PARAMDEF embedded-resource filenames ---------------------------
     /// <summary>Filename (no path) of the Paramdex XML we ship as an embedded
@@ -264,15 +414,20 @@ public static class RegulationConstants
 
     /// <summary>
     /// Deterministic ShopLineupParam row id for a given tier + slot index.
+    /// Accepts <c>slotIndex</c> in <c>[0, ShopSlotsPerTier]</c> inclusive —
+    /// the extra +1 slot is the optional Great Rune bonus slot appended by
+    /// <see cref="Generation.ShopRollGenerator"/> when a tier wins its
+    /// per-tier 15% roll. The 100-ID per-tier window leaves 89 unused IDs
+    /// above the bonus slot, so the range never collides across tiers.
     /// </summary>
     public static int ShopLineupRowId(int tier, int slotIndex)
     {
         if (tier < TierClearConstants.FirstTier || tier > TierClearConstants.LastTier)
             throw new ArgumentOutOfRangeException(nameof(tier),
                 $"tier must be in [{TierClearConstants.FirstTier}, {TierClearConstants.LastTier}], got {tier}");
-        if (slotIndex < 0 || slotIndex >= ShopSlotsPerTier)
+        if (slotIndex < 0 || slotIndex > ShopSlotsPerTier)
             throw new ArgumentOutOfRangeException(nameof(slotIndex),
-                $"slotIndex must be in [0, {ShopSlotsPerTier}), got {slotIndex}");
+                $"slotIndex must be in [0, {ShopSlotsPerTier}] (inclusive — index {ShopSlotsPerTier} is the optional Great Rune slot), got {slotIndex}");
         return ShopLineupRowBase + tier * ShopLineupTierStride + slotIndex;
     }
 

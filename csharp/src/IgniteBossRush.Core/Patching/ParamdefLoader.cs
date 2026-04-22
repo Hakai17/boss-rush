@@ -40,7 +40,7 @@ namespace IgniteBossRush.Core.Patching;
 /// (three PARAM tables per patch) don't re-parse the same XML document.
 /// </para>
 /// </summary>
-internal static class ParamdefLoader
+public static class ParamdefLoader
 {
     private static readonly object s_gate = new();
     private static readonly System.Collections.Generic.Dictionary<string, PARAMDEF> s_cache =

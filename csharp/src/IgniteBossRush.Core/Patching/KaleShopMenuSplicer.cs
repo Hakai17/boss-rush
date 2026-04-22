@@ -228,7 +228,15 @@ public static class KaleShopMenuSplicer
             uint visibilityFlag = (uint)(TierClearConstants.ShopVisibilityFlagBase + tier);
             int shopStart = RegulationConstants.ShopLineupRowBase
                           + tier * RegulationConstants.ShopLineupTierStride;
-            int shopEnd   = shopStart + RegulationConstants.ShopSlotsPerTier - 1;
+            // ShopSlotsPerTier is the BASE count (7 fixed slots: stones +
+            // weapons + tears). When a tier wins the 15% "lucky" roll,
+            // ShopRollGenerator appends a Great Rune at slot index
+            // ShopSlotsPerTier (row shopBase + 7). The scan range must cover
+            // that optional slot too — otherwise the Great Rune row exists
+            // in ShopLineupParam but Kalé never shows it. Tiers without a
+            // Great Rune simply have no row at shopBase + 7, and
+            // OpenRegularShop silently skips missing row IDs inside a range.
+            int shopEnd   = shopStart + RegulationConstants.ShopSlotsPerTier;
 
             // ---- (1) Insert menu entry in state 7 EntryCommands,
             //          BEFORE the trailing slot-99 "Leave" entry. ----
@@ -256,12 +264,25 @@ public static class KaleShopMenuSplicer
             InsertBranchCondition(branchState, menuIndex, newStateId);
 
             // ---- (3) Add new state that opens the per-tier shop ----
+            // OpenPuppetShop (bank=1 id=144) — purchases cost Starlight
+            // Shards instead of runes ("for N Starlight Shards" purchase
+            // confirm text). Byte-for-byte modelled on Athena Randomizer's
+            // Moonwalk Starlight Shop state 4 (t460006100.esd).
+            //
+            // IMPORTANT — no ShowShopMessage(1) prefix, and the exit
+            // condition evaluator is puppet-shop-flavoured (NOT cloned
+            // from the regular-shop template). The earlier attempt that
+            // reused the regular-shop menu-closed evaluator made the
+            // state auto-exit on the first tick because the regular-shop
+            // menu was never open (a puppet shop was), so the exit
+            // predicate evaluated true immediately → silent no-op. The
+            // new evaluator checks for CheckSpecificPersonMenuIsOpen(28, 0)
+            // where 28 is the ER-native puppet-shop menu-type id.
             var newState = new ESD.State
             {
                 EntryCommands = new List<ESD.CommandCall>
                 {
-                    EsdBytecode.ShowShopMessage(1),
-                    EsdBytecode.OpenRegularShop(shopStart, shopEnd),
+                    EsdBytecode.OpenPuppetShop(shopStart, shopEnd),
                 },
                 ExitCommands = new List<ESD.CommandCall>(),
                 WhileCommands = new List<ESD.CommandCall>(),
@@ -269,7 +290,7 @@ public static class KaleShopMenuSplicer
                 {
                     new ESD.Condition(
                         targetState: BackToClearStateId,
-                        evaluator: EsdBytecode.CloneBytes(menuClosedEvaluator)),
+                        evaluator: EsdBytecode.CloneBytes(EsdBytecode.PuppetShopMenuClosedEvaluator)),
                 },
             };
             group[newStateId] = newState;

@@ -631,8 +631,8 @@ $Event(90009921, Default, function() {
     SetEventFlagID(1049300060, OFF); //sequential mode off
     
     if (!PlayerInMap(11, 10, 0, 0)) {
-        DisplayFullScreenMessage(2081027);
-        WaitFixedTimeSeconds(5);
+        //DisplayFullScreenMessage(2081027);
+        WaitFixedTimeSeconds(2);
         $InitializeCommonEvent(0, 90009820, 0); //roundtable warp
     }
     else {
@@ -2254,6 +2254,7 @@ $Event(90009930, Default, function() {
         $InitializeCommonEvent(0, 90009946);
 });
 
+
 //prog sequential mode tier 1 (undefeated bosses)
 $Event(90009931, Default, function() {
     //Soldier of Godrick
@@ -2280,9 +2281,9 @@ $Event(90009931, Default, function() {
 
     
     //Tibia Mariner (Limgrave)
-    else if (!EventFlag(1049304120))
+    else if (!EventFlag(1049304120)) {
         SetEventFlagID(1049302053, ON);
-    
+    }
     
     else { //no undefeated bosses left
         $InitializeCommonEvent(0, 90009921);
@@ -2939,8 +2940,9 @@ $Event(90009951, Default, function() {
         SetEventFlagID(1049302155, ON);
 
     //Tibia Mariner (Limgrave)
-    else if (!EventFlag(1049304120))
+    else if (!EventFlag(1049304120)){
         SetEventFlagID(1049302053, ON);
+    }
 
     else { //no bosses left
         //$InitializeCommonEvent(0, 90009991); //OnTierClear tier 1 (Amber Shard award + shop progression)
@@ -5288,9 +5290,9 @@ $Event(90009810, Default, function(bossrushDefeat) {
         BatchSetEventFlags(1049307399, 1049307799, OFF); //set sequential defeat flags off
         SetEventFlagID(bossrushDefeat, ON); //turn on sequential defeat flag
         if (!EventFlag(1049300093)) { //if warp choice disabled, continue to next boss
-            WaitFixedTimeSeconds(2);
-            DisplayBlinkingMessage(2081025);
-            WaitFixedTimeSeconds(4);
+            //WaitFixedTimeSeconds(2);
+            //DisplayBlinkingMessage(2081025);
+            //WaitFixedTimeSeconds(4);
             $InitializeCommonEvent(0, 90009920);
         }
         else { //if warp choice enabled
@@ -5333,9 +5335,9 @@ $Event(90009810, Default, function(bossrushDefeat) {
     //progression sequential mode (undefeated bosses)
     else if (AnyBatchEventFlags(1049308301, 1049308319)) {
         if (!EventFlag(1049300094)) { //if warp choice disabled, continue to next boss
-            WaitFixedTimeSeconds(2);
-            DisplayBlinkingMessage(2081025);
-            WaitFixedTimeSeconds(4);
+            //WaitFixedTimeSeconds(2);
+            //DisplayBlinkingMessage(2081025);
+            //WaitFixedTimeSeconds(4);
             $InitializeCommonEvent(0, 90009930);
         }
         else { //if warp choice enabled
@@ -5357,9 +5359,9 @@ $Event(90009810, Default, function(bossrushDefeat) {
         BatchSetEventFlags(1049307399, 1049307799, OFF); //set sequential defeat flags off
         SetEventFlagID(bossrushDefeat, ON); //turn on sequential defeat flag
         if (!EventFlag(1049300094)) { //if warp choice disabled, continue to next boss
-            WaitFixedTimeSeconds(2);
-            DisplayBlinkingMessage(2081025);
-            WaitFixedTimeSeconds(4);
+            //WaitFixedTimeSeconds(2);
+            //DisplayBlinkingMessage(2081025);
+            //WaitFixedTimeSeconds(4);
             $InitializeCommonEvent(0, 90009950);
         }
         else { //if warp choice enabled

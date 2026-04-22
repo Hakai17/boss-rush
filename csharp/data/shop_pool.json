@@ -1636,7 +1636,7 @@
     ],
     "ash_of_war": [
       {
-        "equipParamGem_id": 4000,
+        "equipParamGem_id": 10000,
         "name": "Ash of War: Lion's Claw"
       },
       {
@@ -1684,7 +1684,7 @@
         "name": "Ash of War: Sword Dance"
       },
       {
-        "equipParamGem_id": 12800,
+        "equipParamGem_id": 20400,
         "name": "Ash of War: Bloody Slash"
       },
       {
@@ -1712,12 +1712,112 @@
         "name": "Ash of War: Quickstep"
       },
       {
-        "equipParamGem_id": 19100,
+        "equipParamGem_id": 80100,
         "name": "Ash of War: Bloodhound's Step"
       },
       {
         "equipParamGem_id": 19200,
         "name": "Ash of War: Raptor of the Mists"
+      },
+      {
+        "equipParamGem_id": 10800,
+        "name": "Ash of War: Blood Tax"
+      },
+      {
+        "equipParamGem_id": 11100,
+        "name": "Ash of War: Spinning Strikes"
+      },
+      {
+        "equipParamGem_id": 11900,
+        "name": "Ash of War: Poison Moth Flight"
+      },
+      {
+        "equipParamGem_id": 20100,
+        "name": "Ash of War: Sacred Blade"
+      },
+      {
+        "equipParamGem_id": 20200,
+        "name": "Ash of War: Ice Spear"
+      },
+      {
+        "equipParamGem_id": 21000,
+        "name": "Ash of War: Storm Blade"
+      },
+      {
+        "equipParamGem_id": 21400,
+        "name": "Ash of War: Flaming Strike"
+      },
+      {
+        "equipParamGem_id": 21700,
+        "name": "Ash of War: Lightning Slash"
+      },
+      {
+        "equipParamGem_id": 22000,
+        "name": "Ash of War: Vacuum Slice"
+      },
+      {
+        "equipParamGem_id": 22100,
+        "name": "Ash of War: Black Flame Tornado"
+      },
+      {
+        "equipParamGem_id": 22700,
+        "name": "Ash of War: Chilling Mist"
+      },
+      {
+        "equipParamGem_id": 22800,
+        "name": "Ash of War: Poisonous Mist"
+      },
+      {
+        "equipParamGem_id": 30700,
+        "name": "Ash of War: Golden Parry"
+      },
+      {
+        "equipParamGem_id": 60000,
+        "name": "Ash of War: Determination"
+      },
+      {
+        "equipParamGem_id": 60300,
+        "name": "Ash of War: Golden Vow"
+      },
+      {
+        "equipParamGem_id": 60600,
+        "name": "Ash of War: Seppuku"
+      },
+      {
+        "equipParamGem_id": 60700,
+        "name": "Ash of War: Cragblade"
+      },
+      {
+        "equipParamGem_id": 65400,
+        "name": "Ash of War: Braggart's Roar"
+      },
+      {
+        "equipParamGem_id": 414000,
+        "name": "Ash of War: Flame Skewer"
+      },
+      {
+        "equipParamGem_id": 415000,
+        "name": "Ash of War: Savage Lion's Claw"
+      },
+      {
+        "equipParamGem_id": 416000,
+        "name": "Ash of War: Divine Beast Frost Stomp"
+      },
+      {
+        "equipParamGem_id": 417000,
+        "name": "Ash of War: Flame Spear"
+      },
+      {
+        "equipParamGem_id": 418000,
+        "name": "Ash of War: Carian Sovereignty"
+      },
+      {
+        "equipParamGem_id": 419000,
+        "name": "Ash of War: Shriek of Sorrow"
+      },
+      {
+        "equipParamGem_id": 505000,
+        "name": "Ash of War: The Poison Flower Blooms Twice"
       }
     ],
     "crystal_tears": [
@@ -1797,12 +1897,35 @@
         "equipParamGoods_id": 2011070,
         "name": "Deflecting Hardtear"
       }
+    ],
+    "great_runes": [
+      {
+        "equipParamGoods_id": 191,
+        "name": "Godrick's Great Rune"
+      },
+      {
+        "equipParamGoods_id": 192,
+        "name": "Radahn's Great Rune"
+      },
+      {
+        "equipParamGoods_id": 193,
+        "name": "Morgott's Great Rune"
+      },
+      {
+        "equipParamGoods_id": 194,
+        "name": "Rykard's Great Rune"
+      },
+      {
+        "equipParamGoods_id": 195,
+        "name": "Mohg's Great Rune"
+      }
     ]
   },
   "exclusions": {
     "weapons": [],
     "talismans": [],
     "ash_of_war": [],
-    "crystal_tears": []
+    "crystal_tears": [],
+    "great_runes": []
   }
 }

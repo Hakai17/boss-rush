@@ -731,6 +731,41 @@ Greater Potentate's Cookbook [13]
 
 
 Imbued Sword Key
+BossRush Tier1 GoldenSeed
+BossRush Tier1 SacredTear
+BossRush Tier1 SmithingStone1
+BossRush Tier1 SmithingStone2
+BossRush Tier1 SomberStone1
+BossRush Tier1 SomberStone2
+BossRush Tier2 SacredTear
+BossRush Tier2 Smithing3
+BossRush Tier2 SomberStone3
+BossRush Tier4 GoldenSeed
+BossRush Tier4 SacredTear
+BossRush Tier4 Smithing5
+BossRush Tier4 Somber5
+BossRush Tier5 GoldenSeed
+BossRush Tier5 SacredTear
+BossRush Tier5 Somber6
+BossRush Tier6 GoldenSeed
+BossRush Tier6 SacredTear
+BossRush Tier6 Smithing6
+BossRush Tier6 Somber7
+BossRush Tier7 GoldenSeed
+BossRush Tier7 SacredTear
+BossRush Tier7 Smithing7
+BossRush Tier7 Somber8
+BossRush Tier8 GoldenSeed
+BossRush Tier8 SacredTear
+BossRush Tier8 Smithing8
+BossRush Tier8 Ancient
+BossRush Tier8 Somber9
+BossRush Tier8 Somber Ancient
+BossRush Tier3 GoldenSeed
+BossRush Tier3 SacredTear
+BossRush Tier3 Smithing4
+BossRush Tier3 Somber4
+BossRush Tier2 GoldenSeed
 Academy Glintstone Key
 Map: Liurnia- West
 

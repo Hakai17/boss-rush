@@ -177,11 +177,11 @@ public class RegulationIoRoundTripTests
             }).Apply();
 
             // Result bookkeeping: 0 goods rows (no longer mutated) +
-            // 9 ItemLot + 99 Shop = 108 total.
+            // 9 ItemLot + 63 Shop = 72 total.
             Assert.Equal(0,  result.EquipParamGoodsRowsWritten);
             Assert.Equal(9,  result.ItemLotParamMapRowsWritten);
-            Assert.Equal(99, result.ShopLineupParamRowsWritten);
-            Assert.Equal(108, result.RowsWritten);
+            Assert.Equal(63, result.ShopLineupParamRowsWritten);
+            Assert.Equal(72, result.RowsWritten);
 
             // Re-parse the output and assert the rows are actually there
             // with the cell values we meant to write. This is the strongest
@@ -386,7 +386,10 @@ public class RegulationIoRoundTripTests
                     Convert.ToInt32(GetCell(row!, RegulationConstants.ShopLineupField_EquipId)));
                 Assert.Equal(RegulationPatcher.MapEquipType(slot.Kind),
                     Convert.ToByte(GetCell(row!, RegulationConstants.ShopLineupField_EquipType)));
-                Assert.Equal((uint)tier.ShopVisibilityFlag,
+                // eventFlag_forRelease = 0 — required by OpenPuppetShop.
+                // Per-tier menu visibility is enforced at ESD level via
+                // Kalé's AddTalkListDataIf condition, not on the row.
+                Assert.Equal(0u,
                     Convert.ToUInt32(GetCell(row!, RegulationConstants.ShopLineupField_EventFlagForRelease)));
                 // mtrlId is left at the paramdef "no material required"
                 // sentinel (-1). Setting it to 0 would gate the row behind

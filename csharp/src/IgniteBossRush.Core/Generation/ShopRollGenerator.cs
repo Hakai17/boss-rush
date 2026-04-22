@@ -15,31 +15,40 @@ namespace IgniteBossRush.Core.Generation;
 /// <summary>
 /// Deterministic generator for the Boss Rush shop. Given a competition seed
 /// and a curated <see cref="ShopPoolFile"/>, produces a
-/// <see cref="TierRewardsPlan"/> that fully enumerates every per-tier shop
-/// slot for all 9 tiers (99 slots total), then serialises it to
+/// <see cref="TierRewardsPlan"/> that enumerates every per-tier shop slot
+/// (63 base + up to 9 bonus Great Rune slots), then serialises it to
 /// <c>tier_rewards.json</c> alongside the existing <c>drops.json</c>.
 ///
 /// Determinism contract:
 ///   - Same seed + same shop_pool.json bytes → byte-identical tier_rewards.json.
-///   - Domain tag per tier is <c>"{base_tag}_{tier}"</c> (e.g.
-///     "kale_shop_tier_1"), guaranteeing that tier rolls are independent of
-///     boss-drop rolls and of each other (tier 5 doesn't shift if tier 4's
-///     pool changes). This matches the convention used in
-///     <see cref="DropGenerator"/> (domain "drop-rolls-v1").
-///   - Inside a tier, the 11 slots are rolled in fixed order: three weapons,
-///     three talismans, three AoW, two tears. This sequence of
-///     <see cref="ShakeDeterministicRng.RandBelow"/> calls is part of the
-///     determinism contract — reordering the slot loop changes every output.
-///   - Sampling is **without replacement within a category for that tier**:
-///     each weapon/talisman/AoW/tear is unique within its tier so the
-///     player never sees three identical slots. Across tiers items may
-///     repeat (intentional — a Tier 3 Uchigatana is a different cost-decision
-///     than a Tier 8 one).
+///   - Domain tag is per-category: <c>"{base_tag}_weapons"</c>,
+///     <c>"{base_tag}_talismans"</c>, <c>"{base_tag}_ash_of_war"</c>,
+///     <c>"{base_tag}_crystal_tears"</c>, <c>"{base_tag}_great_runes"</c>
+///     (shuffle), and <c>"{base_tag}_great_runes_roll_N"</c> (per-tier 15%
+///     roll). Each stream is independent so curating one pool does NOT
+///     shift another's picks.
+///   - Inside a tier, the 7 base slots are emitted in fixed order: two
+///     weapons, two talismans, two AoW, one tear. Reordering this loop
+///     changes every output, so it's part of the determinism contract.
+///   - Sampling is **without replacement globally across all tiers** per
+///     category: once Wild Strikes rolls into tier 2's AoW slot, it cannot
+///     appear in any later tier's shop. Implementation: one Fisher–Yates
+///     shuffle per category over the entire post-exclusion pool, then slice
+///     into per-tier chunks (tier N gets the Nth contiguous slice). This
+///     also guarantees within-tier uniqueness for free.
+///   - <b>Great Runes (bonus 8th slot):</b> each tier independently rolls
+///     <c>RandBelow(100) &lt; <see cref="GreatRuneChancePercent"/></c>. If
+///     the roll wins AND the great-runes shuffle still has unclaimed entries,
+///     an 8th slot with kind <see cref="ShopSlotKinds.GreatRune"/> is
+///     appended to that tier. Same global-uniqueness rule: no rune appears
+///     in two tiers in the same run. Per-tier slot count is therefore 7 or
+///     8, and total run slot count is 63 + luckyTierCount ∈ [63, 72].
+///     Cost = <see cref="GreatRuneCostAmberShards"/> Starlight Shards
+///     (base slots cost <see cref="BaseSlotCostAmberShards"/>).
 ///
-/// Sampling without replacement is implemented as a Fisher–Yates partial
-/// shuffle driven by <see cref="ShakeDeterministicRng.RandBelow"/>. We must
-/// NOT use <c>OrderBy(rng.Next())</c>-style sorts: those would consume an
-/// indeterminate number of PRNG draws (depending on .NET's sort comparator)
+/// Fisher–Yates is driven by <see cref="ShakeDeterministicRng.RandBelow"/>.
+/// We must NOT use <c>OrderBy(rng.Next())</c>-style sorts: those would consume
+/// an indeterminate number of PRNG draws (depending on .NET's sort comparator)
 /// and break Python parity if we ever port this.
 /// </summary>
 public sealed class ShopRollGenerator
@@ -47,14 +56,39 @@ public sealed class ShopRollGenerator
     public const string ToolName = "IgniteRush-ShopRoll";
     public const string ToolVersion = "0.1.0";
 
-    /// <summary>9 tiers × 11 slots/tier.</summary>
+    /// <summary>9 tiers × 7 base slots/tier = 63 base shop slots. Lucky
+    /// tiers get a bonus Great Rune 8th slot — total slot count is
+    /// 63 + (number of tiers that win the <see cref="GreatRuneChancePercent"/>%
+    /// roll).</summary>
     public const int TierCount = 9;
-    public const int WeaponsPerTier = 3;
-    public const int TalismansPerTier = 3;
-    public const int AshOfWarPerTier = 3;
-    public const int TearsPerTier = 2;
-    public const int SlotsPerTier =
-        WeaponsPerTier + TalismansPerTier + AshOfWarPerTier + TearsPerTier; // = 11
+    public const int WeaponsPerTier = 2;
+    public const int TalismansPerTier = 2;
+    public const int AshOfWarPerTier = 2;
+    public const int TearsPerTier = 1;
+    public const int BaseSlotsPerTier =
+        WeaponsPerTier + TalismansPerTier + AshOfWarPerTier + TearsPerTier; // = 7
+
+    /// <summary>Legacy alias kept for downstream code that treated per-tier
+    /// slot count as an invariant. With Great Runes enabled, per-tier count
+    /// is variable (7 or 8) — callers that need the strict base count
+    /// should use <see cref="BaseSlotsPerTier"/>; callers that need the
+    /// upper bound should use <see cref="BaseSlotsPerTier"/> + 1.</summary>
+    public const int SlotsPerTier = BaseSlotsPerTier;
+
+    /// <summary>Percent chance each tier wins a bonus Great Rune 8th slot.
+    /// The roll is a seeded per-tier <c>RandBelow(100) &lt; N</c> draw,
+    /// deterministic for a fixed seed. 15% over 9 tiers ≈ 1.35 runes per
+    /// run on average — rare enough to feel like a reward, common enough
+    /// that most runs see at least one.</summary>
+    public const int GreatRuneChancePercent = 15;
+
+    /// <summary>Cost (in Starlight Shards) of one Great Rune slot. Higher
+    /// than the base 1-shard slots to reflect scarcity.</summary>
+    public const int GreatRuneCostAmberShards = 3;
+
+    /// <summary>Base cost (in Starlight Shards) for every non-Great-Rune
+    /// slot. Written to ShopLineupParam's <c>value</c> field.</summary>
+    public const int BaseSlotCostAmberShards = 1;
 
     /// <summary>Tier visibility / award flags — owned by IgniteBossRush, NOT
     /// part of the base Ignite Rush mod's flag scheme. Documented in
@@ -128,64 +162,134 @@ public sealed class ShopRollGenerator
             .Where(a => !pool.Exclusions.AshOfWar.Contains(a.ParamId)).ToList();
         var tears = pool.Pools.CrystalTears
             .Where(t => !pool.Exclusions.CrystalTears.Contains(t.ParamId)).ToList();
+        var greatRunes = pool.Pools.GreatRunes
+            .Where(r => !pool.Exclusions.GreatRunes.Contains(r.ParamId)).ToList();
 
-        RequireMinSize(weapons.Count,   WeaponsPerTier,   "weapons");
-        RequireMinSize(talismans.Count, TalismansPerTier, "talismans");
-        RequireMinSize(aow.Count,       AshOfWarPerTier,  "ash_of_war");
-        RequireMinSize(tears.Count,     TearsPerTier,     "crystal_tears");
+        // Floor is now the total-run demand (perTier * TierCount) because
+        // sampling is without-replacement across all tiers per category.
+        // A pool that meets the old per-tier floor but not the global one
+        // would run out partway through the slice loop.
+        RequireMinSize(weapons.Count,   WeaponsPerTier   * TierCount, "weapons");
+        RequireMinSize(talismans.Count, TalismansPerTier * TierCount, "talismans");
+        RequireMinSize(aow.Count,       AshOfWarPerTier  * TierCount, "ash_of_war");
+        RequireMinSize(tears.Count,     TearsPerTier     * TierCount, "crystal_tears");
+        // great_runes has no minimum — the pool can be empty (no runes at all)
+        // or small (fewer unique runes than max possible lucky tiers). The
+        // tier-roll loop below clamps lucky tiers to the available rune count.
 
-        var tiers = new List<TierPlan>(TierCount);
+        // One full shuffle per category using a category-specific domain.
+        // `SampleWithoutReplacement` with k == source.Count is a complete
+        // Fisher–Yates shuffle (exactly source.Count-1 RandBelow draws — the
+        // last draw is trivially 0). We only need the first perTier*TierCount
+        // entries, but reify the full prefix so slicing stays O(1).
+        var weaponsShuffled   = SampleWithoutReplacement(
+            new ShakeDeterministicRng(seed, $"{pool.DomainTag}_weapons"),
+            weapons, weapons.Count).ToList();
+        var talismansShuffled = SampleWithoutReplacement(
+            new ShakeDeterministicRng(seed, $"{pool.DomainTag}_talismans"),
+            talismans, talismans.Count).ToList();
+        var aowShuffled       = SampleWithoutReplacement(
+            new ShakeDeterministicRng(seed, $"{pool.DomainTag}_ash_of_war"),
+            aow, aow.Count).ToList();
+        var tearsShuffled     = SampleWithoutReplacement(
+            new ShakeDeterministicRng(seed, $"{pool.DomainTag}_crystal_tears"),
+            tears, tears.Count).ToList();
+        // Great Rune shuffle uses its own domain so curating the rune pool
+        // doesn't shift other categories' rolls. Global-unique across tiers:
+        // lucky tiers consume runes in shuffle order, so a rune can't repeat.
+        var greatRunesShuffled = greatRunes.Count > 0
+            ? SampleWithoutReplacement(
+                new ShakeDeterministicRng(seed, $"{pool.DomainTag}_great_runes"),
+                greatRunes, greatRunes.Count).ToList()
+            : new List<Models.GreatRunePoolEntry>();
+
+        // Per-tier probabilistic roll: independent stream per tier from a
+        // dedicated domain, so changing GreatRuneChancePercent doesn't shift
+        // other RNG streams. Deterministic for a fixed seed.
+        var luckyTiers = new bool[TierCount + 1]; // 1-indexed for readability
+        int luckyCount = 0;
         for (int tierIdx = 1; tierIdx <= TierCount; tierIdx++)
         {
-            // Per-tier domain tag isolates rolls — see class-level XML doc.
-            string domain = $"{pool.DomainTag}_{tierIdx}";
-            var rng = new ShakeDeterministicRng(seed, domain);
+            var rng = new ShakeDeterministicRng(
+                seed, $"{pool.DomainTag}_great_runes_roll_{tierIdx}");
+            bool wins = rng.RandBelow(100) < GreatRuneChancePercent;
+            // Clamp: can't hand out more runes than the pool has (global
+            // uniqueness guarantee). Later lucky tiers get skipped if the
+            // rune pool is exhausted.
+            if (wins && luckyCount < greatRunesShuffled.Count)
+            {
+                luckyTiers[tierIdx] = true;
+                luckyCount++;
+            }
+        }
 
-            // Order is load-bearing: weapons → talismans → AoW → tears.
-            // Each call below issues exactly N RandBelow draws at most
-            // (Fisher–Yates style — see SampleWithoutReplacement).
-            var picks = new List<ShopSlot>(SlotsPerTier);
+        var tiers = new List<TierPlan>(TierCount);
+        // Running index into the Great Rune shuffle — advances only when a
+        // lucky tier claims a rune. Guarantees global uniqueness across tiers.
+        int greatRuneCursor = 0;
+        for (int tierIdx = 1; tierIdx <= TierCount; tierIdx++)
+        {
+            // Slice offsets — tier N gets the Nth contiguous chunk from each
+            // shuffled list, so an item that appeared in tier K's slice can
+            // never reappear in tier K+1..9's slices (global uniqueness).
+            int wOffset    = (tierIdx - 1) * WeaponsPerTier;
+            int tOffset    = (tierIdx - 1) * TalismansPerTier;
+            int aOffset    = (tierIdx - 1) * AshOfWarPerTier;
+            int tearOffset = (tierIdx - 1) * TearsPerTier;
+
+            // Slot-emit order is load-bearing: weapons → talismans → AoW →
+            // tears → (optional great rune). Reordering changes every seed's
+            // output — part of the determinism contract.
+            var picks = new List<ShopSlot>(BaseSlotsPerTier + 1);
             int shopBase = 8000000 + tierIdx * 100;
             int slotIdx = 0;
 
-            foreach (var w in SampleWithoutReplacement(rng, weapons, WeaponsPerTier))
-            {
+            for (int i = 0; i < WeaponsPerTier; i++)
                 picks.Add(new ShopSlot
                 {
                     ShopId = shopBase + slotIdx++,
                     Kind = ShopSlotKinds.Weapon,
-                    ParamId = w.ParamId,
-                    CostAmberShards = 1,
+                    ParamId = weaponsShuffled[wOffset + i].ParamId,
+                    CostAmberShards = BaseSlotCostAmberShards,
                 });
-            }
-            foreach (var t in SampleWithoutReplacement(rng, talismans, TalismansPerTier))
-            {
+            for (int i = 0; i < TalismansPerTier; i++)
                 picks.Add(new ShopSlot
                 {
                     ShopId = shopBase + slotIdx++,
                     Kind = ShopSlotKinds.Talisman,
-                    ParamId = t.ParamId,
-                    CostAmberShards = 1,
+                    ParamId = talismansShuffled[tOffset + i].ParamId,
+                    CostAmberShards = BaseSlotCostAmberShards,
                 });
-            }
-            foreach (var a in SampleWithoutReplacement(rng, aow, AshOfWarPerTier))
-            {
+            for (int i = 0; i < AshOfWarPerTier; i++)
                 picks.Add(new ShopSlot
                 {
                     ShopId = shopBase + slotIdx++,
                     Kind = ShopSlotKinds.AshOfWar,
-                    ParamId = a.ParamId,
-                    CostAmberShards = 1,
+                    ParamId = aowShuffled[aOffset + i].ParamId,
+                    CostAmberShards = BaseSlotCostAmberShards,
                 });
-            }
-            foreach (var tear in SampleWithoutReplacement(rng, tears, TearsPerTier))
-            {
+            for (int i = 0; i < TearsPerTier; i++)
                 picks.Add(new ShopSlot
                 {
                     ShopId = shopBase + slotIdx++,
                     Kind = ShopSlotKinds.Tear,
-                    ParamId = tear.ParamId,
-                    CostAmberShards = 1,
+                    ParamId = tearsShuffled[tearOffset + i].ParamId,
+                    CostAmberShards = BaseSlotCostAmberShards,
+                });
+
+            // Bonus 8th slot: appended only if this tier won the 15% roll AND
+            // the shuffled rune pool still has unclaimed entries. Shop ID
+            // always lands at slot index 7 (the next 100-ID window slot),
+            // leaving slots 0..6 fixed across every tier.
+            if (luckyTiers[tierIdx])
+            {
+                var rune = greatRunesShuffled[greatRuneCursor++];
+                picks.Add(new ShopSlot
+                {
+                    ShopId = shopBase + slotIdx++,
+                    Kind = ShopSlotKinds.GreatRune,
+                    ParamId = rune.ParamId,
+                    CostAmberShards = GreatRuneCostAmberShards,
                 });
             }
 
@@ -302,7 +406,9 @@ public sealed class ShopRollGenerator
     {
         if (actual < min)
             throw new InvalidDataException(
-                $"shop_pool.json '{poolName}' has only {actual} entries after exclusions; need at least {min}");
+                $"shop_pool.json '{poolName}' has only {actual} entries after exclusions; "
+                + $"need at least {min} (per-tier count × {TierCount} tiers) "
+                + "because sampling is without-replacement across all tiers.");
     }
 
     private static string ToHexLower(byte[] data)

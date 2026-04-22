@@ -175,7 +175,9 @@ public class EndToEndSmokeTests
                     Convert.ToInt32(GetCell(row!, RegulationConstants.ShopLineupField_EquipId)));
                 Assert.Equal(RegulationPatcher.MapEquipType(slot.Kind),
                     Convert.ToByte(GetCell(row!, RegulationConstants.ShopLineupField_EquipType)));
-                Assert.Equal((uint)tier.ShopVisibilityFlag,
+                // eventFlag_forRelease = 0 to match OpenPuppetShop
+                // expectations. Visibility is ESD-level via AddTalkListDataIf.
+                Assert.Equal(0u,
                     Convert.ToUInt32(GetCell(row!, RegulationConstants.ShopLineupField_EventFlagForRelease)));
                 Assert.Equal(-1,
                     Convert.ToInt32(GetCell(row!, RegulationConstants.ShopLineupField_MtrlId)));

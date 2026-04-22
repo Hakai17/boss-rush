@@ -69,15 +69,22 @@ public class PipelineRunnerTests
             Assert.True(File.Exists(result.TierRewardsPath),
                 $"tier_rewards.json missing at {result.TierRewardsPath}");
             Assert.False(string.IsNullOrEmpty(result.TierRewardsFingerprint));
-            Assert.Equal(9,  result.ShopTierCount);
-            Assert.Equal(99, result.ShopSlotCount);
+            Assert.Equal(9, result.ShopTierCount);
+            // Slot count is 63 base + lucky-tier bonus for Great Runes
+            // (seed-dependent, 0-9 lucky tiers at 15% each). We assert the
+            // invariant range rather than an exact count so the test isn't
+            // tied to a specific seed's RNG output.
+            Assert.InRange(result.ShopSlotCount, 63, 63 + 9);
 
             Assert.True(File.Exists(result.PatchedRegulationPath),
                 $"patched regulation.bin missing at {result.PatchedRegulationPath}");
-            // 0 goods + 9 itemlot + 99 shop = 108. We reuse vanilla Starlight
-            // Shards (goods 1290) as currency rather than cloning a custom goods
-            // row, so the goods count is 0.
-            Assert.Equal(108, result.RegulationRowsWritten);
+            // 0 goods + 9 itemlot + {63..72} shop = 72..81 total. We reuse
+            // vanilla Starlight Shards (goods 1290) as currency rather than
+            // cloning a custom goods row, so the goods count is 0. The shop
+            // row count is variable because of the Great Rune bonus slot.
+            Assert.InRange(result.RegulationRowsWritten, 72, 81);
+            // Cross-check: shop slot count == regulation rows - itemlot rows.
+            Assert.Equal(result.ShopSlotCount, result.RegulationRowsWritten - 9);
 
             // Boss-reward strip should have fired (ZeroBossDrops defaults to true).
             Assert.NotNull(result.BossRewardCallsStripped);

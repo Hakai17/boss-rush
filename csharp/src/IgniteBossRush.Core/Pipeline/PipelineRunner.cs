@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 using System;
+using System.Collections.Generic;
 using System.IO;
 using IgniteBossRush.Core.Bundle;
 using IgniteBossRush.Core.Generation;
@@ -110,6 +111,42 @@ public sealed class PipelineRunner
         if (Options.ZeroBossDrops)
             progress?.Report($"        boss-drop ItemLotParam_enemy rows zeroed: "
                              + $"{regulationResult.BossDropLotsZeroed}");
+
+        // --- 3b. menu FMG patch (per-tier shop window titles) ---
+        // Paired with step 3: regulation rows written above reference message
+        // IDs 508001..508009 via menuTitleMsgId. Those IDs must exist in the
+        // menu_dlc02.msgbnd.dcx bundle's GR_MenuText.fmg, or the game renders
+        // the title as the placeholder "?MenuText?". English-only today —
+        // non-English players fall back to the default "Purchase Item"
+        // chrome (vanilla behaviour; no regression).
+        string sourceMenuMsgBnd = Path.Combine(Options.SourceModDir, "msg", "engus",
+                                                RegulationConstants.MenuMsgBndBaseName);
+        string patchedMenuMsgBnd = Path.Combine(patchedModDir, "msg", "engus",
+                                                 RegulationConstants.MenuMsgBndBaseName);
+        if (File.Exists(sourceMenuMsgBnd))
+        {
+            var titleEntries = new Dictionary<int, string>();
+            for (int tier = 1; tier <= 9; tier++)
+            {
+                titleEntries[RegulationConstants.BossRushShopTitleMsgId(tier)] =
+                    string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                                  RegulationConstants.BossRushShopTitleFormat, tier);
+            }
+            var fmgResult = FmgPatcher.Apply(
+                sourceMsgBndPath: sourceMenuMsgBnd,
+                outputPath: patchedMenuMsgBnd,
+                targetFmgName: RegulationConstants.BossRushShopTitleFmgName,
+                entries: titleEntries);
+            progress?.Report($"        menu FMG patched: +{fmgResult.EntriesAdded} "
+                             + $"added, ~{fmgResult.EntriesReplaced} replaced "
+                             + $"(target={fmgResult.TargetFmgName}, "
+                             + $"total entries now={fmgResult.TotalEntriesInFmg})");
+        }
+        else
+        {
+            progress?.Report($"        menu FMG patch SKIPPED: source {sourceMenuMsgBnd} not found "
+                             + "(shop title will show '?MenuText?' placeholder in-game)");
+        }
 
         // --- 4. boss reward strip ---
         BossRewardStripResult? bossRewardStripResult = null;

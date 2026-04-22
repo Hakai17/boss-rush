@@ -4,7 +4,7 @@
 // @game    Sekiro
 // @string    "N:\\GR\\data\\Param\\event\\common_func.emevd\u0000N:\\GR\\data\\Param\\event\\common_macro.emevd\u0000\u0000\u0000\u0000\u0000\u0000"
 // @linked    [0,82]
-// @version    3.6.1
+// @version    3.6.2
 // ==/EMEVD==
 
 // コンストラクタ -- constructor
@@ -107,6 +107,8 @@ $Event(0, Default, function() {
     $InitializeCommonEvent(0, 90005512, 14000562, 14002552, 14002553);
     $InitializeCommonEvent(0, 90005515, 14008550, 14001550);
     $InitializeCommonEvent(0, 90005515, 14008552, 14001552);
+    //Open Renalla's Doors
+    SetEventFlagID(14008556, ON);
     $InitializeCommonEvent(0, 90005501, 14000510, 14000511, 0, 14001510, 14001511, 1035461512, 14000512);
     $InitializeEvent(0, 14002510);
     $InitializeCommonEvent(0, 90005501, 14000515, 14000516, 0, 14001515, 14001516, 14001517, 14000517);

@@ -176,6 +176,87 @@ internal static class EsdBytecode
             Arguments = new List<byte[]> { ArgInt32(start), ArgInt32(end) },
         };
 
+    /// <summary>
+    /// <c>OpenPuppetShop(start, end)</c> — bank 1, id 144, 2 args.
+    /// Purchases from this shop cost <b>Starlight Shards</b> instead of
+    /// runes — closes the long-pinned "for N runes" UI label bug. Same
+    /// arg shape as <see cref="OpenRegularShop"/>: two ShopLineupParam
+    /// row IDs.
+    ///
+    /// <para>
+    /// <b>Opcode source.</b> Confirmed by decoding Athena Randomizer
+    /// v0.20's Moonwalk-patched talkesdbnd bundle at
+    /// <c>me3-v0.8.0/dlc/script/talk/m61_00_00_00.talkesdbnd.dcx</c>,
+    /// specifically Athena's new <c>t460006100.esd</c> (Millicent
+    /// Starlight Shop) which vanilla ER doesn't include. States 2/3/4
+    /// of that ESD invoke <c>bank=1 id=144 args=2</c> with arg bytes
+    /// that decode to the exact ShopLineupParam row ranges Athena's
+    /// "Merchant Millicent - Starlight Shop" rows occupy
+    /// (<c>9200000..9203255</c>). The triangulation with vawser's
+    /// ER-Documentation (which places OpenPuppetShop adjacent to
+    /// OpenAshOfWarShop in the menu-type table) completes the
+    /// identification.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Known prior no-op test.</b> An earlier in-game test of
+    /// id=144 on Kalé's Boss Rush tier button produced a silent no-op.
+    /// Root cause was NOT the opcode — Athena's successful use of 144
+    /// is definitive. The most likely no-op cause was that the patched
+    /// ESD didn't reach the game (pipeline or Matt's merge didn't
+    /// deploy) OR the FMG entries referenced via <c>menuTitleMsgId</c>
+    /// were missing at runtime. Subsequent attempts should confirm
+    /// both payloads land before concluding the opcode is wrong again.
+    /// </para>
+    /// </summary>
+    public static ESD.CommandCall OpenPuppetShop(int start, int end)
+        => new ESD.CommandCall
+        {
+            CommandBank = 1, CommandID = 144,
+            Arguments = new List<byte[]> { ArgInt32(start), ArgInt32(end) },
+        };
+
+    /// <summary>
+    /// 33-byte ESDLang evaluator matching Athena Randomizer's working
+    /// Moonwalk Starlight Shop state 2 exit condition. Decompiles to:
+    /// <code>
+    /// assert not (CheckSpecificPersonMenuIsOpen(28, 0)
+    ///             and not CheckSpecificPersonGenericDialogIsOpen(0))
+    /// </code>
+    ///
+    /// <para>
+    /// The constant <c>28</c> (<c>0x1C</c>) is the ER-native menu-type id
+    /// for <see cref="OpenPuppetShop"/>'s shop UI. Pair this evaluator
+    /// with an <see cref="OpenPuppetShop"/> EntryCommand on a new state:
+    /// cloning the regular-shop menu-closed evaluator from Kalé's
+    /// template instead made the state auto-transition out on the first
+    /// tick (regular-shop menu was never open → exit condition fired
+    /// immediately → silent no-op).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Byte source.</b> Pulled verbatim from <c>inspect-esd</c> dump
+    /// of Athena's <c>t460006100.esd</c>, StateGroup 2147483643, State 2,
+    /// Condition[0].Evaluator — the shop-state-exit predicate that pairs
+    /// with Athena's verified-working OpenPuppetShop(9200000, 9201511)
+    /// Moonveil shop.
+    /// </para>
+    /// </summary>
+    public static readonly byte[] PuppetShopMenuClosedEvaluator = new byte[]
+    {
+        0x7b,                                  // CheckSpecificPersonMenuIsOpen (2-arg call open)
+        0x82, 0x1c, 0x00, 0x00, 0x00,          //   push i32 28 (puppet-shop menu-type id)
+        0x82, 0x00, 0x00, 0x00, 0x00,          //   push i32 0
+        0x86,                                  // (close 2-arg call)
+        0x7a,                                  // CheckSpecificPersonGenericDialogIsOpen (1-arg call open)
+        0x82, 0x00, 0x00, 0x00, 0x00,          //   push i32 0
+        0x85,                                  // (close 1-arg call)
+        0x82, 0x00, 0x00, 0x00, 0x00, 0x95,    // == 0    ("dialog NOT open")
+        0x98,                                  // logical NOT  (-> "dialog IS open")
+        0x82, 0x00, 0x00, 0x00, 0x00, 0x95,    // == 0
+        End,                                   // 0xa1 terminator
+    };
+
     /// <summary><c>AddTalkListData(index, textId, reqId)</c> — bank 1, id 19,
     /// 3 args. Matches the non-conditional menu entries in Kalé's state 2.</summary>
     public static ESD.CommandCall AddTalkListData(int index, int textId, int reqId)

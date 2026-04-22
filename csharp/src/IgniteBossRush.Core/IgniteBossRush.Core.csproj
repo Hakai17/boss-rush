@@ -51,6 +51,7 @@
       repository so we stay byte-compatible with Smithbox/Yabber consumers
       working on the same regulation.bin.
     -->
+    <EmbeddedResource Include="Patching\Paramdefs\EquipMtrlSetParam.xml" />
     <EmbeddedResource Include="Patching\Paramdefs\EquipParamGoods.xml" />
     <EmbeddedResource Include="Patching\Paramdefs\ItemLotParam.xml" />
     <EmbeddedResource Include="Patching\Paramdefs\ShopLineupParam.xml" />
