@@ -217,6 +217,64 @@ public sealed class PipelineRunner
             progress?.Report($"{Hdr(5)} Receive-all strip: skipped (ZeroBossDrops=off)");
         }
 
+        // --- 5b. Roundtable care-package splice ---
+        // Inserts a new EMEVD event (11105800) into m11_10_00_00.emevd.dcx
+        // that grants 20 seed-randomized armor pieces (5 head/chest/arms/
+        // legs each) on the player's first Roundtable Hold load. One-shot
+        // guard flag at 1049308317 (outside every wipe window in the
+        // 1049308xxx plateau) makes the grant persist per-save.
+        // See RoundtableCarePackageConstants for the full carve-up.
+        RoundtableCarePackageSpliceResult? carePackageResult = null;
+        IReadOnlyList<int>? carePackageItems = null;
+        {
+            string patchedMapEmevd = Path.Combine(patchedEventDir, RoundtableCarePackageConstants.MapFileBaseName);
+            if (!File.Exists(patchedMapEmevd))
+            {
+                progress?.Report($"        Roundtable care-package SKIPPED: {patchedMapEmevd} not found");
+            }
+            else
+            {
+                string poolJsonPath = Path.Combine(
+                    Options.SourceModDir, SmithboxArmorPoolSource.DefaultRelativePath);
+                if (!File.Exists(poolJsonPath))
+                {
+                    progress?.Report($"        Roundtable care-package SKIPPED: armor pool JSON not found at {poolJsonPath}");
+                }
+                else
+                {
+                    progress?.Report($"        Rolling Roundtable care package (5 per slot, 4 slots)");
+                    var armorPool = new SmithboxArmorPoolSource(poolJsonPath);
+                    progress?.Report($"        Armor pool loaded: {armorPool.TotalIds} ids "
+                                     + $"(head={armorPool.GetIds(ArmorSlot.Head).Count}, "
+                                     + $"chest={armorPool.GetIds(ArmorSlot.Chest).Count}, "
+                                     + $"arms={armorPool.GetIds(ArmorSlot.Arms).Count}, "
+                                     + $"legs={armorPool.GetIds(ArmorSlot.Legs).Count})");
+                    var roll = CarePackagePicker.Pick(armorPool, seed);
+
+                    byte[] mapBytes = File.ReadAllBytes(patchedMapEmevd);
+                    EMEVD mapEmevd = EMEVD.Read(mapBytes);
+                    carePackageResult = RoundtableCarePackageSplicer.Apply(
+                        mapEmevd,
+                        roll,
+                        new RoundtableCarePackageSplicerOptions { OverwriteExistingEvent = true });
+                    File.WriteAllBytes(patchedMapEmevd, mapEmevd.Write());
+
+                    var flat = new List<int>(RoundtableCarePackageConstants.TotalItems);
+                    foreach (var (_, id) in roll.InGiveOrder()) flat.Add(id);
+                    carePackageItems = flat;
+
+                    progress?.Report($"        Care package event 11105800: "
+                                     + $"event {(carePackageResult.EventInserted ? "inserted" : "already-present")}, "
+                                     + $"trigger {(carePackageResult.TriggerInserted ? "inserted" : "already-present")}, "
+                                     + $"items={carePackageResult.ItemsGranted}");
+                    progress?.Report($"        Picked ids: head=[{string.Join(",", roll.Head)}], "
+                                     + $"chest=[{string.Join(",", roll.Chest)}], "
+                                     + $"arms=[{string.Join(",", roll.Arms)}], "
+                                     + $"legs=[{string.Join(",", roll.Legs)}]");
+                }
+            }
+        }
+
         // --- 6. Kalé menu splice ---
         progress?.Report($"{Hdr(6)} Splicing Merchant Kalé tier menu into t600001110.esd");
         string kaleBndPath = Path.Combine(
@@ -276,7 +334,11 @@ public sealed class PipelineRunner
             ReceiveAllLotsZeroed: receiveAllStripResult?.AwardItemLotsZeroed,
             ReceiveAllEventsPatched: receiveAllStripResult?.EventsPatched,
             KaleMenuEntriesInserted: kaleSpliceResult is { AlreadyPresent: false } ? kaleSpliceResult.TierEntries.Count : (int?)null,
-            KaleMenuAlreadyPresent: kaleSpliceResult.AlreadyPresent);
+            KaleMenuAlreadyPresent: kaleSpliceResult.AlreadyPresent,
+            CarePackageEventInserted: carePackageResult?.EventInserted,
+            CarePackageTriggerInserted: carePackageResult?.TriggerInserted,
+            CarePackageItemsGranted: carePackageResult?.ItemsGranted,
+            CarePackageItemIds: carePackageItems);
     }
 
     /// <summary>Load the Kalé talkesdbnd, mutate <c>t314001110.esd</c> in
@@ -358,4 +420,9 @@ public sealed record PipelineResult(
     int? ReceiveAllEventsPatched,
     // Kalé tier-shop menu splice:
     int? KaleMenuEntriesInserted = null,
-    bool? KaleMenuAlreadyPresent = null);
+    bool? KaleMenuAlreadyPresent = null,
+    // Roundtable care-package splice (m11_10_00_00.emevd.dcx):
+    bool? CarePackageEventInserted = null,
+    bool? CarePackageTriggerInserted = null,
+    int? CarePackageItemsGranted = null,
+    System.Collections.Generic.IReadOnlyList<int>? CarePackageItemIds = null);

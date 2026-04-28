@@ -28,6 +28,7 @@ public static class PatchConstants
     //   bank 2003 id 66  "Set Event Flag"                  args: u8 flagType, u32 flagId, u8 flagState
     //
     public const int BankControlFlowSystem = 1000;
+    public const int BankWait              = 1001;
     public const int BankControlFlowEvent  = 1003;
     public const int BankControlFlowLabel  = 1014;
     public const int BankSystem            = 2000;
@@ -62,6 +63,24 @@ public static class PatchConstants
 
     public const int IdWaitForEventFlag    = 0;
     public const int IdSkipIfEventFlag     = 1;
+    /// <summary>End If Event Flag (1003, 2). Args: (u8 endType, u8 flagState,
+    /// u8 flagType, u32 flagId). Same 8-byte packing as
+    /// <see cref="IdSkipIfEventFlag"/> but with an endType prefix instead of
+    /// a skip count. Decoded from event 10002670 of m10_00_00_00.emevd:
+    /// <c>EndIf(EventFlag(eventFlagId))</c> compiles to bytes
+    /// <c>00 01 00 00 00 00 00 00</c> (END=0, ON=1, EventFlag=0, flagId=0
+    /// param-substituted). Used by <see cref="InstructionFactory.EndIfEventFlagOn"/>
+    /// to short-circuit the Roundtable care-package event when its
+    /// one-shot guard flag is already ON.</summary>
+    public const int IdEndIfEventFlag      = 2;
+
+    /// <summary>Wait Fixed Time Seconds (1001, 0). Args: (f32 seconds).
+    /// Argument is a single 4-byte little-endian float. Used by
+    /// <see cref="InstructionFactory.WaitFixedTimeSeconds"/> to give the
+    /// engine a beat after a Roundtable load before the
+    /// <c>DirectlyGivePlayerItem</c> chain fires (mirrors the vanilla
+    /// pattern in 10002670 / 10002671 tutorial popups).</summary>
+    public const int IdWaitFixedTimeSeconds = 0;
 
     public const int IdInitializeEvent       = 0;
     public const int IdInitializeCommonEvent = 6;
@@ -69,6 +88,18 @@ public static class PatchConstants
     public const int IdSetEventFlag         = 66;
     public const int IdAwardItemLot         = 4;
     public const int IdRemoveItemFromPlayer = 24;
+
+    /// <summary>Directly Give Player Item (2003, 43). Args:
+    /// (u32 itemType, u32 itemId, u32 eventFlagId, u32 count) — 16 bytes,
+    /// no padding since every arg is a u32. Decoded from event 10002670 of
+    /// m10_00_00_00.emevd where <c>DirectlyGivePlayerItem(ItemType.Goods,
+    /// 9101, eventFlagId, 1)</c> compiles to bytes
+    /// <c>03 00 00 00 8d 23 00 00 00 00 00 00 01 00 00 00</c>.
+    /// The third arg is a per-item dedup flag — the engine sets it ON when
+    /// the item is given and refuses subsequent gives if it's already ON.
+    /// Used by the Roundtable care-package event to grant 20 armor pieces
+    /// in one shot.</summary>
+    public const int IdDirectlyGivePlayerItem = 43;
 
     /// <summary>
     /// Batch Set Event Flags (2003, 22). Args: (u32 startId, u32 endId, u8 state).
@@ -86,8 +117,26 @@ public static class PatchConstants
     public const byte FlagStateOff       = 0;  // "OFF" / "Desired state = off"
     public const byte FlagTypeEventFlag  = 0;  // "Event Flag" (as opposed to "Event Value" / "World Flag")
 
-    // Item Type enum used by RemoveItemFromPlayer / AwardItem (EMEDF "Item Type"):
-    //   0 = Weapon, 1 = Armor, 2 = Ring (Talisman), 3 = Goods.
+    /// <summary>
+    /// "Event slot completion" flag type — used by the
+    /// <c>EndIf(ThisEventSlot())</c> / <c>SetThisEventSlot(ON)</c> idiom.
+    /// Same opcodes as the regular event-flag check/set (1003/2 and 2003/66)
+    /// but the engine reads/writes per-event-slot state in save data instead
+    /// of the global event-flag table. Lets us implement "fire once per save,
+    /// ever" without consuming a flag from the 1049308xxx plateau. Decoded
+    /// from m10_00 event 10000519 (Elevator initial flag setting), which
+    /// uses the pattern verbatim.
+    /// </summary>
+    public const byte FlagTypeEventSlot  = 2;
+
+    // Item Type enum used by RemoveItemFromPlayer / AwardItem / DirectlyGivePlayerItem
+    // (EMEDF "Item Type"):
+    //   0 = Weapon, 1 = Armor (the param table is named EquipParamProtector but
+    //   the EMEDF / DarkScript decompiler exposes the enum as "Armor"),
+    //   2 = Ring (Talisman), 3 = Goods.
+    public const byte ItemTypeWeapon     = 0;
+    public const byte ItemTypeArmor      = 1;
+    public const byte ItemTypeAccessory  = 2;
     public const byte ItemTypeGoods      = 3;
     // RemoveItemFromPlayer "Number" field: EMEDF schema declares min=0, max=999
     // for this arg. DarkScript convention says -1 is the "remove all" sentinel,

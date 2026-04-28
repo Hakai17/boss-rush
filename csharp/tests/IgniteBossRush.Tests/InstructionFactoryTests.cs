@@ -68,6 +68,87 @@ public class InstructionFactoryTests
     }
 
     [Fact]
+    public void EndIfEventFlagOn_ArgData_MatchesDecodedReferenceBytes()
+    {
+        // Reference bytes from m10_00_00_00.emevd event 10002670 instruction [1]:
+        //   bank=1003 id=2 argLen=8 hex: 00 01 00 00 00 00 00 00
+        //     [endType=END=0][state=ON=1][type=EventFlag=0][pad=0][flagId=u32 LE]
+        const uint flagId = 0x1234_5678;
+        EMEVD.Instruction instr = InstructionFactory.EndIfEventFlagOn(flagId);
+
+        Assert.Equal(PatchConstants.BankControlFlowEvent, instr.Bank);
+        Assert.Equal(PatchConstants.IdEndIfEventFlag, instr.ID);
+        Assert.Equal(InstructionFactory.EndIfEventFlagArgLen, instr.ArgData.Length);
+
+        Assert.Equal(PatchConstants.EndTypeEnd, instr.ArgData[0]);
+        Assert.Equal(PatchConstants.FlagStateOn, instr.ArgData[1]);
+        Assert.Equal(PatchConstants.FlagTypeEventFlag, instr.ArgData[2]);
+        Assert.Equal((byte)0, instr.ArgData[3]); // padding
+        uint readFlag = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(4, 4));
+        Assert.Equal(flagId, readFlag);
+    }
+
+    [Fact]
+    public void WaitFixedTimeSeconds_ArgData_IsFourBytes_LittleEndianFloat()
+    {
+        EMEVD.Instruction instr = InstructionFactory.WaitFixedTimeSeconds(1.0f);
+
+        Assert.Equal(PatchConstants.BankWait, instr.Bank);
+        Assert.Equal(PatchConstants.IdWaitFixedTimeSeconds, instr.ID);
+        Assert.Equal(InstructionFactory.WaitFixedTimeSecondsArgLen, instr.ArgData.Length);
+
+        // 1.0f LE = 00 00 80 3f (matches the reference instruction in event
+        // 10002670 inst [18] of m10_00_00_00).
+        Assert.Equal((byte)0x00, instr.ArgData[0]);
+        Assert.Equal((byte)0x00, instr.ArgData[1]);
+        Assert.Equal((byte)0x80, instr.ArgData[2]);
+        Assert.Equal((byte)0x3f, instr.ArgData[3]);
+    }
+
+    [Fact]
+    public void DirectlyGivePlayerItem_ArgData_MatchesDecodedReferenceBytes()
+    {
+        // Reference bytes from m10_00_00_00.emevd event 10002670 last instruction:
+        //   bank=2003 id=43 argLen=16 hex:
+        //     03 00 00 00 8d 23 00 00 00 00 00 00 01 00 00 00
+        //     [type=Goods=3][id=9101][flag=0 param-substituted][count=1]
+        EMEVD.Instruction instr = InstructionFactory.DirectlyGivePlayerItem(
+            itemType: PatchConstants.ItemTypeGoods,
+            itemId: 9101u,
+            eventFlagId: 0u,
+            count: 1u);
+
+        Assert.Equal(PatchConstants.BankEvent, instr.Bank);
+        Assert.Equal(PatchConstants.IdDirectlyGivePlayerItem, instr.ID);
+        Assert.Equal(InstructionFactory.DirectlyGivePlayerItemArgLen, instr.ArgData.Length);
+
+        uint type  = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(0,  4));
+        uint id    = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(4,  4));
+        uint flag  = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(8,  4));
+        uint count = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(12, 4));
+        Assert.Equal(3u, type);
+        Assert.Equal(9101u, id);
+        Assert.Equal(0u, flag);
+        Assert.Equal(1u, count);
+    }
+
+    [Fact]
+    public void InitializeEvent_ArgData_IsEightBytes_SlotZero_TargetAtOffsetFour()
+    {
+        EMEVD.Instruction instr = InstructionFactory.InitializeEvent(
+            slot: 0, targetEventId: 11105800u);
+
+        Assert.Equal(PatchConstants.BankSystem, instr.Bank);
+        Assert.Equal(PatchConstants.IdInitializeEvent, instr.ID);
+        Assert.Equal(InstructionFactory.InitializeEventNoArgsLen, instr.ArgData.Length);
+
+        int slot = BinaryPrimitives.ReadInt32LittleEndian(instr.ArgData.AsSpan(0, 4));
+        uint target = BinaryPrimitives.ReadUInt32LittleEndian(instr.ArgData.AsSpan(4, 4));
+        Assert.Equal(0, slot);
+        Assert.Equal(11105800u, target);
+    }
+
+    [Fact]
     public void BossFlagParameter_TargetsLhsSlot_Of_SkipIfComparison()
     {
         // Parameter semantics: "for instruction N, copy srcStartByte..srcStartByte+byteCount

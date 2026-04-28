@@ -17,6 +17,9 @@ allocations sit within the range (tier N's flag → tier N+1's flag).
 | `1049308220..229` | Shard-award one-shot guard, base `+tier` (tier 1 = 220+1 = 221) | 1 | `TierClearConstants.ShardAwardEventFlagBase` | Stable, allocated |
 | `1049308250..275` | *(wiped)* — cleared OFF by the init event (`10010001`) at game load | — | base Ignite Rush mod | **DO NOT ALLOCATE HERE** — cleared on every load |
 | `1049308300..316` | Tier-clear latch, base `+tier` (tier 1 = 301, tier 9 = 309; rest reserved) | 1 | `TierClearConstants.TierFlagBase = 1049308300` | Stable, allocated |
+| `1049308301..339` | *(wiped)* — cleared OFF by **six m11_10 events** (11107798, 11107802, 11107804, 11107805, 11107815, 11107816) every time the player engages a boss-mode selection. **DO NOT ALLOCATE HERE** — the wipe overlaps the documented tier-clear range above; the engine relies on the wipe + immediate re-set pattern in events like 11107815 (`SetEventFlagID(1049308301, ON)` after the wipe). | — | base Ignite Rush mod | **DO NOT ALLOCATE HERE** — wiped on every boss-mode select |
+| `1049308340` | Roundtable care-package one-shot guard — ON ⇒ already given | — | `RoundtableCarePackageConstants.OneShotGuardFlag` | Stable, allocated |
+| `1049308341..399` | Unallocated headroom **outside every wipe window** — use for new persistent one-shots | — | — | Free for future use |
 | `1049308400..409` | Shop visibility, base `+tier` — controls whether Kalé shows tier N's entry | 1 | `TierClearConstants.ShopVisibilityFlagBase = 1049308400` | Stable, allocated |
 | `1049308500..1049309370` | **BossRush shop stock flags**, `base + (tier-1)*100 + slot*10` — per-row "already purchased" | **10** | `RegulationConstants.BossRushShopStockFlagBase` | Stable, allocated (stride-10 required; see below) |
 | `1049309371..999` | Unallocated headroom | — | — | Free for future use |
