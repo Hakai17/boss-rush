@@ -498,12 +498,13 @@ public sealed class RegulationPatcher
     internal static byte MapEquipType(string kind) => kind switch
     {
         ShopSlotKinds.Weapon    => RegulationConstants.ShopEquipTypeWeapon,
+        ShopSlotKinds.HeadArmor => RegulationConstants.ShopEquipTypeProtector,
         ShopSlotKinds.Talisman  => RegulationConstants.ShopEquipTypeAccessory,
         ShopSlotKinds.AshOfWar  => RegulationConstants.ShopEquipTypeGem,
         ShopSlotKinds.Tear      => RegulationConstants.ShopEquipTypeGoods,
         ShopSlotKinds.GreatRune => RegulationConstants.ShopEquipTypeGoods,
         _ => throw new ArgumentException(
-            $"Unknown ShopSlot.Kind '{kind}'. Known: weapon, talisman, ash_of_war, tear, great_rune.",
+            $"Unknown ShopSlot.Kind '{kind}'. Known: weapon, head_armor, talisman, ash_of_war, tear, great_rune.",
             nameof(kind)),
     };
 

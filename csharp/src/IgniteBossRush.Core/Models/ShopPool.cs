@@ -58,6 +58,19 @@ public sealed class ShopPools
     /// </summary>
     [JsonPropertyName("great_runes")]
     public List<GreatRunePoolEntry> GreatRunes { get; set; } = new();
+
+    /// <summary>
+    /// Head armor (EquipParamProtector slot 0) eligible to ROLL INTO a
+    /// talisman slot. Each of the 18 talisman positions across the 9 tiers
+    /// independently rolls a 50/50 coin: armor or talisman. Armor wins
+    /// pick from this pool sequentially without replacement; talisman wins
+    /// pick from <see cref="Talismans"/> as before. Empty by default;
+    /// populating this list enables the feature. Pool size of 0 ⇒ feature
+    /// off (every talisman slot stays a talisman, identical to the
+    /// pre-feature behavior).
+    /// </summary>
+    [JsonPropertyName("head_armor")]
+    public List<HeadArmorPoolEntry> HeadArmor { get; set; } = new();
 }
 
 public sealed class ShopExclusions
@@ -76,6 +89,9 @@ public sealed class ShopExclusions
 
     [JsonPropertyName("great_runes")]
     public List<int> GreatRunes { get; set; } = new();
+
+    [JsonPropertyName("head_armor")]
+    public List<int> HeadArmor { get; set; } = new();
 }
 
 public sealed class WeaponPoolEntry
@@ -126,6 +142,19 @@ public sealed class GreatRunePoolEntry
     /// here — those are the pre-Divine-Tower "unactivated" variants that
     /// get consumed during the activation ritual.</summary>
     [JsonPropertyName("equipParamGoods_id")]
+    public int ParamId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+}
+
+/// <summary>Head armor pool entry. <c>EquipParamProtector</c> row id of a
+/// helm; the engine equips it to head slot when granted. Used by the
+/// per-talisman-slot 50/50 coin: when armor wins, the next entry from
+/// this pool (post-shuffle, no replacement) lands in that slot.</summary>
+public sealed class HeadArmorPoolEntry
+{
+    [JsonPropertyName("equipParamProtector_id")]
     public int ParamId { get; set; }
 
     [JsonPropertyName("name")]

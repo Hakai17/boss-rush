@@ -84,4 +84,13 @@ public static class ShopSlotKinds
     /// Maps to <see cref="Patching.RegulationConstants.ShopEquipTypeGoods"/> (3)
     /// in ShopLineupParam.</summary>
     public const string GreatRune = "great_rune";
+
+    /// <summary>Head armor — replaces a talisman slot when the per-slot
+    /// 50/50 category coin lands on armor. The shop window groups by
+    /// <c>equipType</c> so these appear in their own armor section of
+    /// Kalé's scrollable list, alongside the surviving talisman picks.
+    /// Maps to <see cref="Patching.RegulationConstants.ShopEquipTypeProtector"/> (1)
+    /// in ShopLineupParam, with <c>equipId</c> pointing at an
+    /// <c>EquipParamProtector</c> row.</summary>
+    public const string HeadArmor = "head_armor";
 }

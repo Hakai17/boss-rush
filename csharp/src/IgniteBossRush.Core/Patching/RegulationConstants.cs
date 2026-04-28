@@ -136,6 +136,7 @@ public static class RegulationConstants
     /// narrower enum: 0 = Weapon, 1 = Protector, 2 = Accessory, 3 = Goods,
     /// 4 = Gem.</summary>
     public const byte ShopEquipTypeWeapon = 0;
+    public const byte ShopEquipTypeProtector = 1; // armor (head/body/arms/legs)
     public const byte ShopEquipTypeAccessory = 2; // talisman
     public const byte ShopEquipTypeGoods = 3;     // crystal tear
     public const byte ShopEquipTypeGem = 4;       // ash of war

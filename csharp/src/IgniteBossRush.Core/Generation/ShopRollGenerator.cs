@@ -164,6 +164,8 @@ public sealed class ShopRollGenerator
             .Where(t => !pool.Exclusions.CrystalTears.Contains(t.ParamId)).ToList();
         var greatRunes = pool.Pools.GreatRunes
             .Where(r => !pool.Exclusions.GreatRunes.Contains(r.ParamId)).ToList();
+        var headArmor = pool.Pools.HeadArmor
+            .Where(h => !pool.Exclusions.HeadArmor.Contains(h.ParamId)).ToList();
 
         // Floor is now the total-run demand (perTier * TierCount) because
         // sampling is without-replacement across all tiers per category.
@@ -202,6 +204,34 @@ public sealed class ShopRollGenerator
                 new ShakeDeterministicRng(seed, $"{pool.DomainTag}_great_runes"),
                 greatRunes, greatRunes.Count).ToList()
             : new List<Models.GreatRunePoolEntry>();
+        // Head armor shuffle. Independent domain ⇒ curating armor doesn't
+        // shift the talisman/weapon/AoW/tear streams. Global-unique across
+        // tiers via the same shuffle-and-cursor pattern as great runes.
+        var headArmorShuffled = headArmor.Count > 0
+            ? SampleWithoutReplacement(
+                new ShakeDeterministicRng(seed, $"{pool.DomainTag}_head_armor"),
+                headArmor, headArmor.Count).ToList()
+            : new List<Models.HeadArmorPoolEntry>();
+
+        // Per-slot category coins for the talisman positions: one independent
+        // 50/50 draw per (tier, slot) pair, 18 total. Stored up-front so the
+        // tier loop is a pure consumer; this keeps the determinism contract
+        // simple (one coin = one RandBelow(2) call, in tier-major slot-minor
+        // order). Coin draws happen ONLY when head armor is enabled — empty
+        // armor pool ⇒ no coin RNG instantiation, no stream consumption,
+        // talisman behavior is byte-identical to the pre-feature version.
+        bool[] coinIsArmor = new bool[TalismansPerTier * TierCount];
+        if (headArmorShuffled.Count > 0)
+        {
+            var coinRng = new ShakeDeterministicRng(
+                seed, $"{pool.DomainTag}_talisman_or_head_armor_choice");
+            for (int i = 0; i < coinIsArmor.Length; i++)
+            {
+                // RandBelow(2) is a uniform 0/1 draw consuming one u64 of RNG
+                // output. 1 ⇒ this slot is armor; 0 ⇒ talisman.
+                coinIsArmor[i] = coinRng.RandBelow(2) == 1;
+            }
+        }
 
         // Per-tier probabilistic roll: independent stream per tier from a
         // dedicated domain, so changing GreatRuneChancePercent doesn't shift
@@ -224,16 +254,21 @@ public sealed class ShopRollGenerator
         }
 
         var tiers = new List<TierPlan>(TierCount);
-        // Running index into the Great Rune shuffle — advances only when a
-        // lucky tier claims a rune. Guarantees global uniqueness across tiers.
+        // Running indices for streams that don't advance by a fixed per-tier
+        // delta any more.
+        //   • Great Rune cursor: advances only on lucky-tier rolls.
+        //   • Talisman cursor: advances 0/1/2 per tier depending on coin flips.
+        //   • Head Armor cursor: advances 0/1/2 per tier (the inverse of talisman).
+        // Slot-emit order WITHIN a tier remains fixed (W,W, T-or-A,T-or-A, AoW,AoW, Tear).
         int greatRuneCursor = 0;
+        int talismanCursor = 0;
+        int headArmorCursor = 0;
         for (int tierIdx = 1; tierIdx <= TierCount; tierIdx++)
         {
-            // Slice offsets — tier N gets the Nth contiguous chunk from each
-            // shuffled list, so an item that appeared in tier K's slice can
-            // never reappear in tier K+1..9's slices (global uniqueness).
+            // Slice offsets for streams that DO advance by a fixed per-tier
+            // delta (weapons, AoW, tears). Talisman + head_armor cursors
+            // advance dynamically — they're counted via running cursors above.
             int wOffset    = (tierIdx - 1) * WeaponsPerTier;
-            int tOffset    = (tierIdx - 1) * TalismansPerTier;
             int aOffset    = (tierIdx - 1) * AshOfWarPerTier;
             int tearOffset = (tierIdx - 1) * TearsPerTier;
 
@@ -252,14 +287,54 @@ public sealed class ShopRollGenerator
                     ParamId = weaponsShuffled[wOffset + i].ParamId,
                     CostAmberShards = BaseSlotCostAmberShards,
                 });
+            // Talisman-or-armor slots: per-slot 50/50 coin (pre-rolled above)
+            // routes each slot to either the talisman shuffle or the head_armor
+            // shuffle. Both pools advance independently and are global-unique
+            // across tiers (consumed in shuffled order). When the armor pool
+            // is exhausted but a coin still says "armor", we throw — the
+            // user can re-seed (~5% of seeds at 50/50 with a 12-item pool).
             for (int i = 0; i < TalismansPerTier; i++)
-                picks.Add(new ShopSlot
+            {
+                int coinIdx = (tierIdx - 1) * TalismansPerTier + i;
+                bool wantsArmor = coinIsArmor[coinIdx];
+
+                if (wantsArmor)
                 {
-                    ShopId = shopBase + slotIdx++,
-                    Kind = ShopSlotKinds.Talisman,
-                    ParamId = talismansShuffled[tOffset + i].ParamId,
-                    CostAmberShards = BaseSlotCostAmberShards,
-                });
+                    if (headArmorCursor >= headArmorShuffled.Count)
+                    {
+                        throw new InvalidDataException(
+                            $"shop_pool.json 'head_armor' pool exhausted at tier {tierIdx} "
+                            + $"slot index {i} (coin index {coinIdx}). "
+                            + $"Used {headArmorCursor} of {headArmorShuffled.Count} entries; "
+                            + "the seed rolled more 'armor' coins than the pool can satisfy "
+                            + "without replacement. Either widen the pool or re-seed.");
+                    }
+                    picks.Add(new ShopSlot
+                    {
+                        ShopId = shopBase + slotIdx++,
+                        Kind = ShopSlotKinds.HeadArmor,
+                        ParamId = headArmorShuffled[headArmorCursor++].ParamId,
+                        CostAmberShards = BaseSlotCostAmberShards,
+                    });
+                }
+                else
+                {
+                    if (talismanCursor >= talismansShuffled.Count)
+                    {
+                        throw new InvalidDataException(
+                            $"shop_pool.json 'talismans' pool exhausted at tier {tierIdx} "
+                            + $"slot index {i} (coin index {coinIdx}). "
+                            + $"Used {talismanCursor} of {talismansShuffled.Count} entries.");
+                    }
+                    picks.Add(new ShopSlot
+                    {
+                        ShopId = shopBase + slotIdx++,
+                        Kind = ShopSlotKinds.Talisman,
+                        ParamId = talismansShuffled[talismanCursor++].ParamId,
+                        CostAmberShards = BaseSlotCostAmberShards,
+                    });
+                }
+            }
             for (int i = 0; i < AshOfWarPerTier; i++)
                 picks.Add(new ShopSlot
                 {

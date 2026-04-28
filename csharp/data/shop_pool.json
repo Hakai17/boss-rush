@@ -1919,6 +1919,20 @@
         "equipParamGoods_id": 195,
         "name": "Mohg's Great Rune"
       }
+    ],
+    "head_armor": [
+      { "equipParamProtector_id": 1600000, "name": "Greathood" },
+      { "equipParamProtector_id": 872000,  "name": "Okina Mask" },
+      { "equipParamProtector_id": 680000,  "name": "White Mask" },
+      { "equipParamProtector_id": 1090000, "name": "Silver Tear Mask" },
+      { "equipParamProtector_id": 1890000, "name": "Omensmirk Mask" },
+      { "equipParamProtector_id": 830000,  "name": "Twinsage Glintstone Crown" },
+      { "equipParamProtector_id": 5210000, "name": "Curseblade Mask" },
+      { "equipParamProtector_id": 5253000, "name": "Divine Bird Helm" },
+      { "equipParamProtector_id": 5252000, "name": "Divine Beast Helm" },
+      { "equipParamProtector_id": 5290000, "name": "Divine Beast Head" },
+      { "equipParamProtector_id": 5250000, "name": "Horned Warrior Helm" },
+      { "equipParamProtector_id": 5160000, "name": "Rakshasa Helm" }
     ]
   },
   "exclusions": {
@@ -1926,6 +1940,7 @@
     "talismans": [],
     "ash_of_war": [],
     "crystal_tears": [],
-    "great_runes": []
+    "great_runes": [],
+    "head_armor": []
   }
 }

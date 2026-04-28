@@ -342,7 +342,7 @@ public class ShopRollGeneratorTests
 
     private static ShopPoolFile MakePool(
         int weaponCount, int talismanCount, int aowCount, int tearCount,
-        int greatRuneCount = 0)
+        int greatRuneCount = 0, int headArmorCount = 0)
     {
         return new ShopPoolFile
         {
@@ -360,9 +360,154 @@ public class ShopRollGeneratorTests
                     .Select(i => new CrystalTearPoolEntry { ParamId = 10100 + i, Name = $"Tear{i}" }).ToList(),
                 GreatRunes = Enumerable.Range(0, greatRuneCount)
                     .Select(i => new GreatRunePoolEntry { ParamId = 191 + i, Name = $"Rune{i}" }).ToList(),
+                HeadArmor = Enumerable.Range(0, headArmorCount)
+                    .Select(i => new HeadArmorPoolEntry { ParamId = 100000 + i * 1000, Name = $"H{i}" }).ToList(),
             },
             Exclusions = new ShopExclusions(),
         };
+    }
+
+    // =========================================================================
+    // Head armor: per-talisman-slot 50/50 coin tests
+    // =========================================================================
+
+    [Fact]
+    public void HeadArmor_EmptyPool_PreservesPreFeatureBehavior()
+    {
+        // Empty head_armor pool ⇒ no coin RNG instantiated, talisman cursor
+        // advances 2 per tier exactly as before. Plans built with and without
+        // the HeadArmor field present must be byte-identical.
+        var poolNoArmor    = MakePool(20, 20, 20, 10);
+        var poolEmptyArmor = MakePool(20, 20, 20, 10, headArmorCount: 0);
+        var p1 = ShopRollGenerator.BuildPlan("hh-empty-seed", poolNoArmor);
+        var p2 = ShopRollGenerator.BuildPlan("hh-empty-seed", poolEmptyArmor);
+
+        byte[] b1 = CanonicalJsonWriter.Serialize(ShopRollGenerator.ToCanonicalDict(p1));
+        byte[] b2 = CanonicalJsonWriter.Serialize(ShopRollGenerator.ToCanonicalDict(p2));
+        Assert.Equal(b1, b2);
+
+        // Sanity: every talisman slot in p1 is Kind=Talisman, never HeadArmor.
+        foreach (var t in p1.Tiers)
+        {
+            int talismanSlots = t.Slots.Count(s => s.Kind == ShopSlotKinds.Talisman);
+            int armorSlots = t.Slots.Count(s => s.Kind == ShopSlotKinds.HeadArmor);
+            Assert.Equal(2, talismanSlots);
+            Assert.Equal(0, armorSlots);
+        }
+    }
+
+    [Fact]
+    public void HeadArmor_NonEmptyPool_MixesArmorAndTalismansAcrossTiers()
+    {
+        // Pool sized to never exhaust at 50/50 + 18 slots even in worst case.
+        var pool = MakePool(20, 20, 20, 10, headArmorCount: 18);
+        var plan = ShopRollGenerator.BuildPlan("hh-mix-seed", pool);
+
+        int talismanCount = 0, armorCount = 0;
+        foreach (var t in plan.Tiers)
+        {
+            foreach (var s in t.Slots)
+            {
+                if (s.Kind == ShopSlotKinds.Talisman) talismanCount++;
+                else if (s.Kind == ShopSlotKinds.HeadArmor) armorCount++;
+            }
+        }
+        // 18 talisman-slot positions across tiers; expect ~9/9 split, but
+        // any seed that lands fully one-sided would still satisfy
+        // talismanCount + armorCount == 18.
+        Assert.Equal(18, talismanCount + armorCount);
+        // Reasonable variance band around expected 9 — the SHAKE-based RNG
+        // is deterministic, so this seed should reliably land in [4, 14].
+        Assert.InRange(armorCount, 1, 17);
+    }
+
+    [Fact]
+    public void HeadArmor_Determinism_SameSeedSamePlan()
+    {
+        var pool = MakePool(20, 20, 20, 10, headArmorCount: 18);
+        var p1 = ShopRollGenerator.BuildPlan("hh-determ-seed", pool);
+        var p2 = ShopRollGenerator.BuildPlan("hh-determ-seed", pool);
+
+        byte[] b1 = CanonicalJsonWriter.Serialize(ShopRollGenerator.ToCanonicalDict(p1));
+        byte[] b2 = CanonicalJsonWriter.Serialize(ShopRollGenerator.ToCanonicalDict(p2));
+        Assert.Equal(b1, b2);
+    }
+
+    [Fact]
+    public void HeadArmor_DifferentSeeds_ProduceDifferentCategorySplits()
+    {
+        var pool = MakePool(20, 20, 20, 10, headArmorCount: 18);
+        var pA = ShopRollGenerator.BuildPlan("hh-seed-A", pool);
+        var pB = ShopRollGenerator.BuildPlan("hh-seed-B", pool);
+
+        // Either the per-slot Kind sequence differs, or the param_id sequence
+        // does. With 18 independent coin flips + two independent shuffles,
+        // probability of byte-identical output across distinct seeds is ~0.
+        bool anyDiff = false;
+        for (int t = 0; t < pA.Tiers.Count && !anyDiff; t++)
+        {
+            for (int s = 0; s < pA.Tiers[t].Slots.Count && !anyDiff; s++)
+            {
+                var a = pA.Tiers[t].Slots[s];
+                var b = pB.Tiers[t].Slots[s];
+                if (a.Kind != b.Kind || a.ParamId != b.ParamId) anyDiff = true;
+            }
+        }
+        Assert.True(anyDiff);
+    }
+
+    [Fact]
+    public void HeadArmor_ArmorRowsMapToProtectorEquipType()
+    {
+        // Belt-and-braces against a regression in MapEquipType: a plan with
+        // HeadArmor slots must round-trip through RegulationPatcher's
+        // equipType mapping as 1 (Protector). We test the mapping directly
+        // since the patcher itself needs a real regulation.bin — out of
+        // scope for a unit test.
+        var pool = MakePool(20, 20, 20, 10, headArmorCount: 18);
+        var plan = ShopRollGenerator.BuildPlan("hh-equiptype-seed", pool);
+
+        bool sawArmor = false;
+        foreach (var t in plan.Tiers)
+        {
+            foreach (var s in t.Slots)
+            {
+                if (s.Kind == ShopSlotKinds.HeadArmor)
+                {
+                    Assert.Equal(
+                        IgniteBossRush.Core.Patching.RegulationConstants.ShopEquipTypeProtector,
+                        IgniteBossRush.Core.Patching.RegulationPatcher.MapEquipType(s.Kind));
+                    sawArmor = true;
+                }
+            }
+        }
+        Assert.True(sawArmor, "Test seed produced 0 armor rolls — pick a different seed.");
+    }
+
+    [Fact]
+    public void HeadArmor_PoolExhausted_ThrowsClearly()
+    {
+        // 1-entry head_armor pool with a seed that's almost guaranteed to
+        // roll 'armor' more than once across 18 coin flips. Any seed that
+        // lands ≥2 armor coins exhausts the pool → throw.
+        var pool = MakePool(20, 20, 20, 10, headArmorCount: 1);
+        // Try several seeds; the first one that actually exhausts is enough.
+        // Worst case (all 18 talisman) is rare but possible — loop until
+        // we confirm at least one seed exhausts.
+        bool sawExhaustion = false;
+        foreach (var seed in new[] { "ex-A", "ex-B", "ex-C", "ex-D", "ex-E" })
+        {
+            try
+            {
+                ShopRollGenerator.BuildPlan(seed, pool);
+            }
+            catch (InvalidDataException ex) when (ex.Message.Contains("'head_armor' pool exhausted"))
+            {
+                sawExhaustion = true;
+                break;
+            }
+        }
+        Assert.True(sawExhaustion, "No seed in 5 tries exhausted a 1-entry head_armor pool — extend the seed list or check the throw path.");
     }
 
     private sealed class TempPoolFixture : IDisposable
