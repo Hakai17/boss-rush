@@ -27,7 +27,7 @@ namespace IgniteBossRush.Gui.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     // ---- stage definitions ------------------------------------------------
-    private static readonly (string Name, string Desc)[] StageDefs =
+    private static readonly (string Name, string Desc)[] PipelineStageDefs =
     [
         ("Prepare workspace",    "Copies the source mod to the output workspace"),
         ("Roll shop tiers",      "Generates deterministic tier rewards from the seed"),
@@ -37,6 +37,10 @@ public sealed class MainViewModel : ObservableObject
         ("Splice Kale menu",     "Inserts tier-gated shop entries into ESD bytecode"),
         ("Build bundle",         "Creates integrity manifest with SHA-256 fingerprints"),
     ];
+
+    private const string RandomizerStageName = "Randomize enemies";
+    private const string RandomizerStageDesc =
+        "Merges the patched mod into Matt's Randomizer (starting classes + enemy placements)";
 
     // Regex to match "[NN/MM]" progress markers from PipelineRunner.
     private static readonly Regex StageMarkerRx = new(@"^\[(\d{2})/(\d{2})\]", RegexOptions.Compiled);
@@ -97,6 +101,41 @@ public sealed class MainViewModel : ObservableObject
         get => _zeroBossDrops;
         set => Set(ref _zeroBossDrops, value);
     }
+
+    /// <summary>
+    /// When checked (default), mint a new shop seed and merge into Matt's
+    /// Randomizer so enemies and starting-class loadouts change every run.
+    /// </summary>
+    private bool _includeRandomizer = true;
+    public bool IncludeRandomizer
+    {
+        get => _includeRandomizer;
+        set
+        {
+            if (Set(ref _includeRandomizer, value))
+            {
+                RebuildStages();
+                ValidateDataFolder();
+                Raise(nameof(PrimaryActionLabel));
+            }
+        }
+    }
+
+    private string _randomizerDir = RandomizerMerge.DefaultRandomizerDir;
+    public string RandomizerDir
+    {
+        get => _randomizerDir;
+        set
+        {
+            if (Set(ref _randomizerDir, value))
+                ValidateDataFolder();
+        }
+    }
+
+    public string PrimaryActionLabel =>
+        IncludeRandomizer ? "Generate Playable Seed" : "Generate Bundle";
+
+    public int StageCount => Stages.Count;
 
     // ---- pipeline progress ------------------------------------------------
     public ObservableCollection<PipelineStageProgress> Stages { get; } = new();
@@ -159,6 +198,26 @@ public sealed class MainViewModel : ObservableObject
         private set => Set(ref _regulationSummary, value);
     }
 
+    private string _playablePath = "";
+    public string PlayablePath
+    {
+        get => _playablePath;
+        private set
+        {
+            if (Set(ref _playablePath, value))
+                Raise(nameof(HasPlayable));
+        }
+    }
+
+    public bool HasPlayable => !string.IsNullOrEmpty(PlayablePath) && Directory.Exists(PlayablePath);
+
+    private string _enemySeed = "";
+    public string EnemySeed
+    {
+        get => _enemySeed;
+        private set => Set(ref _enemySeed, value);
+    }
+
     private bool _isRunning;
     public bool IsRunning
     {
@@ -200,6 +259,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CopyBundleRootCommand { get; }
     public RelayCommand CopyAllFingerprintsCommand { get; }
     public RelayCommand OpenOutputFolderCommand { get; }
+    public RelayCommand OpenPlayableFolderCommand { get; }
+    public RelayCommand LaunchPlayableCommand { get; }
     public RelayCommand PackageZipCommand { get; }
     public RelayCommand RefreshDataCommand { get; }
 
@@ -219,12 +280,12 @@ public sealed class MainViewModel : ObservableObject
         CopyBundleRootCommand      = new RelayCommand(CopyBundleRoot, () => !string.IsNullOrEmpty(BundleRoot));
         CopyAllFingerprintsCommand = new RelayCommand(CopyAllFingerprints, () => PipelineSucceeded);
         OpenOutputFolderCommand    = new RelayCommand(OpenOutputFolder);
+        OpenPlayableFolderCommand  = new RelayCommand(OpenPlayableFolder, () => HasPlayable);
+        LaunchPlayableCommand      = new RelayCommand(LaunchPlayable, () => HasPlayable);
         PackageZipCommand          = new RelayCommand(async () => await PackageZipAsync(), () => PipelineSucceeded && !IsRunning);
         RefreshDataCommand         = new RelayCommand(ValidateDataFolder);
 
-        // Initialize stage collection.
-        foreach (var (name, desc) in StageDefs)
-            Stages.Add(new PipelineStageProgress(Stages.Count + 1, name, desc));
+        RebuildStages();
 
         // Tick timer for live elapsed display.
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
@@ -245,6 +306,12 @@ public sealed class MainViewModel : ObservableObject
 
         if (!File.Exists(_shopPoolPath))
             missing.Add("data\\shop_pool.json");
+
+        if (IncludeRandomizer && !RandomizerMerge.RandomizerLooksInstalled(RandomizerDir))
+            missing.Add($"EldenRingRandomizer.exe in {RandomizerDir}");
+
+        if (IncludeRandomizer && RandomizerMerge.FindScript() is null)
+            missing.Add("merge-randomizer.ps1 next to IgniteRush.exe");
 
         if (missing.Count > 0)
         {
@@ -268,6 +335,18 @@ public sealed class MainViewModel : ObservableObject
         CopyAllFingerprintsCommand.RaiseCanExecuteChanged();
         OpenOutputFolderCommand.RaiseCanExecuteChanged();
         PackageZipCommand.RaiseCanExecuteChanged();
+        OpenPlayableFolderCommand.RaiseCanExecuteChanged();
+        LaunchPlayableCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RebuildStages()
+    {
+        Stages.Clear();
+        foreach (var (name, desc) in PipelineStageDefs)
+            Stages.Add(new PipelineStageProgress(Stages.Count + 1, name, desc));
+        if (IncludeRandomizer)
+            Stages.Add(new PipelineStageProgress(Stages.Count + 1, RandomizerStageName, RandomizerStageDesc));
+        Raise(nameof(StageCount));
     }
 
     private bool CanRun() => !IsRunning && DataReady;
@@ -286,6 +365,8 @@ public sealed class MainViewModel : ObservableObject
         RaiseLog();
         ArtifactTree = BundleRoot = PatchedModPath = BundlePath = "";
         TierRewardsFingerprint = PatchedRegulationPath = RegulationSummary = "";
+        PlayablePath = "";
+        EnemySeed = "";
         PipelineSucceeded = false;
         CurrentStageIndex = 0;
         ProgressPercent = 0;
@@ -302,10 +383,10 @@ public sealed class MainViewModel : ObservableObject
         {
             bool autoMinted = false;
             string seed = Seed.Trim();
-            if (string.IsNullOrEmpty(seed))
+            if (IncludeRandomizer || string.IsNullOrEmpty(seed))
             {
                 seed = DropGeneratorOptions.MintRandomSeed();
-                Seed = seed;   // show it in the UI immediately
+                Seed = seed;
                 autoMinted = true;
             }
             string origin = autoMinted ? "auto-minted (128-bit)" : "user-supplied";
@@ -372,8 +453,45 @@ public sealed class MainViewModel : ObservableObject
                         ? "already-present (idempotent re-patch)"
                         : "skipped"));
 
+            if (IncludeRandomizer)
+            {
+                string playableDir = Path.Combine(_workDir, "playable");
+                BeginRandomizerStage();
+                AppendLog("");
+                AppendLog("=== RANDOMIZER MERGE ===");
+                var mergeOpts = new RandomizerMergeOptions
+                {
+                    PatchedModDir = result.PatchedModDir,
+                    OutDir = playableDir,
+                    RandomizerDir = RandomizerDir,
+                    ShopSeed = result.Seed,
+                    KeepShop = true,
+                };
+                int mergeCode = await Task.Run(() => RandomizerMerge.Run(mergeOpts, progress));
+                if (mergeCode != 0)
+                    throw new InvalidOperationException($"Randomizer merge failed (exit {mergeCode}). See the log.");
+
+                FinalizeCurrentStage();
+                PlayablePath = playableDir;
+                RandomizerSeedInfo? seeds = RandomizerMerge.ReadSeedInfo(playableDir);
+                if (seeds is not null)
+                {
+                    EnemySeed = seeds.EnemySeed;
+                    if (!string.IsNullOrWhiteSpace(seeds.ShopSeed)
+                        && !seeds.ShopSeed.StartsWith("(kept", StringComparison.OrdinalIgnoreCase))
+                        Seed = seeds.ShopSeed;
+                }
+                AppendLog($"Playable folder: {playableDir}");
+                if (!string.IsNullOrEmpty(EnemySeed))
+                    AppendLog($"Enemy seed:      {EnemySeed}");
+                StatusText = "Playable seed ready — launch from the Actions panel";
+            }
+            else
+            {
+                StatusText = "Bundle generated successfully";
+            }
+
             PipelineSucceeded = true;
-            StatusText = "Bundle generated successfully";
             ProgressPercent = 100;
         }
         catch (Exception ex)
@@ -493,6 +611,43 @@ public sealed class MainViewModel : ObservableObject
     {
         if (Directory.Exists(_workDir))
             Process.Start(new ProcessStartInfo { FileName = _workDir, UseShellExecute = true });
+    }
+
+    private void OpenPlayableFolder()
+    {
+        if (HasPlayable)
+            Process.Start(new ProcessStartInfo { FileName = PlayablePath, UseShellExecute = true });
+    }
+
+    private void LaunchPlayable()
+    {
+        if (!HasPlayable) return;
+        string bat = Path.Combine(PlayablePath, "launchmod_rando.bat");
+        if (!File.Exists(bat))
+        {
+            MessageBox.Show($"launchmod_rando.bat not found in:\n{PlayablePath}",
+                "Launch failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = bat,
+            WorkingDirectory = PlayablePath,
+            UseShellExecute = true,
+        });
+    }
+
+    private void BeginRandomizerStage()
+    {
+        FinalizeCurrentStage();
+        if (Stages.Count < 1) return;
+        CurrentStageIndex = Stages.Count;
+        ProgressPercent = ((CurrentStageIndex - 1.0) / Stages.Count) * 100;
+        _stageStopwatch.Restart();
+        var stage = Stages[CurrentStageIndex - 1];
+        stage.State = StageState.Active;
+        stage.Detail = "Launching Elden Ring Randomizer";
+        StatusText = stage.Name;
     }
 
     // ---- zip packaging ----------------------------------------------------

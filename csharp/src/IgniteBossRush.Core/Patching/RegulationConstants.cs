@@ -278,6 +278,37 @@ public static class RegulationConstants
     public static int BossRushShopTitleMsgId(int tier) =>
         BossRushShopTitleMsgIdBase + tier;
 
+    /// <summary>Name of the FMG inside <c>menu_dlc02.msgbnd.dcx</c> that
+    /// holds the long starting-class blurbs (paired with the short names
+    /// in <see cref="BossRushShopTitleFmgName"/>).</summary>
+    public const string MenuLineHelpFmgName = "GR_LineHelp";
+
+    // ---- 1.17.1 Tarnished Pack starting classes (menu FMG) ------------
+    /// <summary>
+    /// <c>GR_MenuText</c> IDs for vanilla starting-class names.
+    /// 288100–288109 are Vagabond…Wretch (already in the 1.16.1
+    /// <c>menu_dlc02</c>). 1.17.1 added Idus Knight (288110) and Heavy
+    /// Knight (288111). The shipped source_mod menu is still 1.16.1, so
+    /// those IDs are missing and character-create renders
+    /// <c>?text_name?</c> until <see cref="MenuDlc02Patcher"/> injects
+    /// them. 297140/297141 are the parallel name slots next to
+    /// 297130–297139.
+    /// </summary>
+    public const int IdusKnightMenuTextId = 288110;
+    public const int HeavyKnightMenuTextId = 288111;
+    public const int IdusKnightMenuTextIdAlt = 297140;
+    public const int HeavyKnightMenuTextIdAlt = 297141;
+
+    public const string IdusKnightName = "Idus Knight";
+    public const string HeavyKnightName = "Heavy Knight";
+
+    /// <summary>Official Bandai EN blurb for Idus Knight (1.17.1).</summary>
+    public const string IdusKnightDescription =
+        "A knight of the land of Idus, famed for their lightweight attire and weaponry, which they wield with ample dexterity.";
+
+    /// <summary>Official Bandai EN blurb for Heavy Knight (1.17.1).</summary>
+    public const string HeavyKnightDescription =
+        "A knight in bulky steel armor capable of mowing through foes with a substantively-sized scimitar.";
 
     // ---- PARAMDEF embedded-resource filenames ---------------------------
     /// <summary>Filename (no path) of the Paramdex XML we ship as an embedded

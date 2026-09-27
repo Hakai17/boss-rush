@@ -25,14 +25,15 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
   --shop-pool          <path>   shop_pool.json (curated equipId pools per category)
   --seed               <hex>    seed (auto-minted if omitted)
   --source-regulation  <path>   source regulation.bin (e.g. mod/regulation.bin)
+  --vanilla-regulation <path>   optional 1.17.1 game regulation.bin (auto-detected)
   --out-regulation     <path>   destination regulation.bin (parent dir created)
   --out-rewards-dir    <path>   directory to write tier_rewards.json into
                                 (created; co-locates with the rewards fingerprint)
   --source-menu-msgbnd <path>   (optional) source menu_dlc02.msgbnd.dcx. When
                                 provided alongside --out-menu-msgbnd, the
-                                command patches the menu FMG to add per-tier
-                                "Boss Rush - Tier N" titles so the shop window
-                                doesn't render "?MenuText?" in-game.
+                                command patches GR_MenuText (shop titles +
+                                Idus/Heavy Knight names) and GR_LineHelp
+                                (those classes' blurbs).
   --out-menu-msgbnd    <path>   (optional) destination menu_dlc02.msgbnd.dcx.
   --force                       overwrite --out-regulation if it already exists
   --zero-boss-drops             also zero the ItemLotParam_enemy rows in the
@@ -46,6 +47,7 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
     {
         var p = new ArgParser(
             knownOptions: new[] { "--shop-pool", "--seed", "--source-regulation",
+                                  "--vanilla-regulation",
                                   "--out-regulation", "--out-rewards-dir",
                                   "--source-menu-msgbnd", "--out-menu-msgbnd" },
             knownFlags: new[] { "--help", "--force", "--zero-boss-drops" });
@@ -93,10 +95,18 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
             Plan                 = plan,
             Force                = p.HasFlag("--force"),
             ZeroBossDrops        = p.HasFlag("--zero-boss-drops"),
+            VanillaRegulationPath = p.Optional("--vanilla-regulation")
+                ?? RegulationRebase.FindDefaultVanillaRegulation(),
         };
         var regResult = new RegulationPatcher(regOpts).Apply();
 
         Console.WriteLine($"patched regulation: {regResult.OutputPath}");
+        if (regResult.RebasedOnVanilla)
+            Console.WriteLine($"  rebased 1.17.1  : overlaid {regResult.RebaseTablesOverlaid} tables "
+                              + $"(+{regResult.RebaseRowsAdded} rows, ~{regResult.RebaseRowsReplaced} replaced); "
+                              + "CharaInitParam kept from vanilla (Idus Knight / Heavy Knight)");
+        else
+            Console.WriteLine("  rebased 1.17.1  : skipped (vanilla regulation.bin not found)");
         Console.WriteLine($"  binder files    : {regResult.TotalBinderFiles}");
         Console.WriteLine($"  rows written    : {regResult.RowsWritten} "
                           + $"(goods={regResult.EquipParamGoodsRowsWritten}, "
@@ -111,23 +121,25 @@ igniterush regulate — roll tier_rewards.json + patch regulation.bin (Step 7).
         // the game renders "?MenuText?" in place of the title.
         if (sourceMenuMsgBnd is not null && outMenuMsgBnd is not null)
         {
-            var titleEntries = new System.Collections.Generic.Dictionary<int, string>();
-            for (int tier = 1; tier <= 9; tier++)
-            {
-                titleEntries[RegulationConstants.BossRushShopTitleMsgId(tier)] =
-                    string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                                  RegulationConstants.BossRushShopTitleFormat, tier);
-            }
-            var fmgRes = FmgPatcher.Apply(
-                sourceMsgBndPath: sourceMenuMsgBnd,
-                outputPath: outMenuMsgBnd,
-                targetFmgName: RegulationConstants.BossRushShopTitleFmgName,
-                entries: titleEntries);
+            FmgPatchResult[] fmg = FmgPatcher.ApplyAll(
+                sourceMenuMsgBnd,
+                outMenuMsgBnd,
+                new Dictionary<string, IReadOnlyDictionary<int, string>>
+                {
+                    [RegulationConstants.BossRushShopTitleFmgName] = MenuDlc02Patcher.MenuTextEntries(),
+                    [RegulationConstants.MenuLineHelpFmgName] = MenuDlc02Patcher.LineHelpEntries(),
+                });
+            FmgPatchResult fmgRes = fmg.First(r =>
+                string.Equals(r.TargetFmgName, RegulationConstants.BossRushShopTitleFmgName, StringComparison.OrdinalIgnoreCase));
+            FmgPatchResult helpRes = fmg.First(r =>
+                string.Equals(r.TargetFmgName, RegulationConstants.MenuLineHelpFmgName, StringComparison.OrdinalIgnoreCase));
             Console.WriteLine($"patched menu FMG  : {fmgRes.OutputPath}");
             Console.WriteLine($"  DCX compression : {fmgRes.DcxCompressionType}");
-            Console.WriteLine($"  target FMG      : {fmgRes.TargetFmgName}");
-            Console.WriteLine($"  entries added   : {fmgRes.EntriesAdded}, replaced: {fmgRes.EntriesReplaced}");
-            Console.WriteLine($"  total entries   : {fmgRes.TotalEntriesInFmg}");
+            Console.WriteLine($"  MenuText        : +{fmgRes.EntriesAdded} added, ~{fmgRes.EntriesReplaced} replaced "
+                              + $"(shop titles + Idus/Heavy Knight)");
+            Console.WriteLine($"  LineHelp        : +{helpRes.EntriesAdded} added, ~{helpRes.EntriesReplaced} replaced "
+                              + $"(Idus/Heavy Knight blurbs)");
+            Console.WriteLine($"  total MenuText  : {fmgRes.TotalEntriesInFmg}");
         }
         else if (sourceMenuMsgBnd is not null || outMenuMsgBnd is not null)
         {

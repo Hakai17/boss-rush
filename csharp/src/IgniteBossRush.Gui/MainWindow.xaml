@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:IgniteBossRush.Gui.ViewModels"
         xmlns:conv="clr-namespace:IgniteBossRush.Gui.Converters"
-        Title="Ignite Rush — Seeded Competition Tool"
-        Height="680" Width="1020"
-        MinHeight="540" MinWidth="800"
+        Title="Ignite Rush — Playable Seed"
+        Height="740" Width="1040"
+        MinHeight="600" MinWidth="860"
         Style="{StaticResource IgniteWindowStyle}"
         WindowStartupLocation="CenterScreen"
         Icon="Ignite.png">
@@ -47,7 +47,7 @@
           <StackPanel VerticalAlignment="Center">
             <TextBlock Style="{StaticResource HeadlineText}" Text="Ignite Rush"/>
             <TextBlock Style="{StaticResource SubheadText}" Margin="0,3,0,0"
-                       Text="Seeded competition bundle generator for Elden Ring Boss Rush"/>
+                       Text="Generate a playable Boss Rush seed — shop, enemies, and starting classes"/>
           </StackPanel>
         </StackPanel>
 
@@ -166,22 +166,40 @@
                        Foreground="{StaticResource GoldPrimaryBrush}" Margin="0,0,0,14"/>
 
             <!-- Seed row -->
-            <TextBlock Style="{StaticResource FieldLabel}" Text="Seed (hex)" Margin="0,0,0,4"/>
-            <Grid Margin="0,0,0,14">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Shop seed (hex)" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,6">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <TextBox Grid.Column="0" Style="{StaticResource MonoTextBox}"
                        Text="{Binding Seed, UpdateSourceTrigger=PropertyChanged}"
-                       ToolTip="128-bit hex seed for deterministic generation. Leave empty to auto-mint."/>
+                       ToolTip="Minted automatically for every playable seed. Used as-is only when enemy randomizer is off."/>
               <Button Grid.Column="1" Content="&#x2728; Mint" Style="{StaticResource IconButton}"
                       Command="{Binding MintSeedCommand}" Margin="6,0,0,0"
-                      ToolTip="Generate a random 128-bit seed"/>
+                      IsEnabled="{Binding IsNotRunning}"
+                      ToolTip="Generate a random 128-bit shop seed"/>
             </Grid>
+            <TextBlock Text="A new shop seed is minted every playable run, together with the enemy seed."
+                       FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                       TextWrapping="Wrap" Margin="0,0,0,12"
+                       Visibility="{Binding IncludeRandomizer, Converter={StaticResource BoolToVis}}"/>
 
-            <!-- Zero boss drops toggle -->
+            <CheckBox IsChecked="{Binding IncludeRandomizer}" Margin="0,0,0,8"
+                      IsEnabled="{Binding IsNotRunning}"
+                      Content="Randomize enemies and starting-class loadouts"
+                      ToolTip="Runs Matt's Randomizer with boss rush.randomizeopt (tarnished + changestats, no item rando)"/>
+
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Randomizer folder" Margin="0,0,0,4"
+                       Visibility="{Binding IncludeRandomizer, Converter={StaticResource BoolToVis}}"/>
+            <TextBox Style="{StaticResource MonoTextBox}" Margin="0,0,0,12"
+                     Text="{Binding RandomizerDir, UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding IsNotRunning}"
+                     Visibility="{Binding IncludeRandomizer, Converter={StaticResource BoolToVis}}"
+                     ToolTip="Folder that contains EldenRingRandomizer.exe"/>
+
             <CheckBox IsChecked="{Binding ZeroBossDrops}" Margin="0,0,0,16"
+                      IsEnabled="{Binding IsNotRunning}"
                       Content="Zero boss-drop loot (no ENEMY FELLED drop toast)"
                       ToolTip="Zeros 38 boss ItemLotParam_enemy rows and strips dispatch calls from common_func.emevd.dcx"/>
 
@@ -198,11 +216,11 @@
 
               <Button Grid.Column="1" Style="{StaticResource PrimaryButton}"
                       Command="{Binding RunCommand}" IsDefault="True"
-                      ToolTip="Generate the seeded competition bundle">
+                      ToolTip="Mint a new shop seed, patch the mod, then randomize enemies and starting classes">
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="&#x25B6; " FontSize="11" VerticalAlignment="Center"
                              Visibility="{Binding IsNotRunning, Converter={StaticResource BoolToVis}}"/>
-                  <TextBlock Text="Generate Bundle"
+                  <TextBlock Text="{Binding PrimaryActionLabel}"
                              Visibility="{Binding IsNotRunning, Converter={StaticResource BoolToVis}}"/>
                   <TextBlock Text="Generating..."
                              Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}"/>
@@ -213,7 +231,7 @@
         </Border>
 
         <!-- Log (collapsed by default) -->
-        <Expander Grid.Row="2" Grid.RowSpan="2" IsExpanded="False"
+        <Expander Grid.Row="2" Grid.RowSpan="2" IsExpanded="True"
                   Foreground="{StaticResource TextMutedBrush}">
           <Expander.Header>
             <TextBlock Text="PIPELINE LOG" FontSize="10" FontWeight="SemiBold"
@@ -252,7 +270,7 @@
 
             <TextBlock FontFamily="Consolas" FontSize="12" Margin="0,0,0,4"
                        Foreground="{StaticResource GoldPrimaryBrush}">
-              <Run Text="{Binding CurrentStageIndex, Mode=OneWay}"/><Run Text=" / 7 stages"/>
+              <Run Text="{Binding CurrentStageIndex, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding StageCount, Mode=OneWay}"/><Run Text=" stages"/>
             </TextBlock>
 
             <TextBlock Text="{Binding StatusText}" FontSize="12"
@@ -269,10 +287,43 @@
                          Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,10"/>
 
               <Button Style="{StaticResource PrimaryButton}"
+                      Command="{Binding LaunchPlayableCommand}"
+                      HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      Padding="12,10"
+                      Visibility="{Binding HasPlayable, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="&#x25B6; Launch Elden Ring" FontSize="13"/>
+              </Button>
+
+              <Button Style="{StaticResource SecondaryButton}"
+                      Command="{Binding OpenPlayableFolderCommand}"
+                      HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      Padding="12,8"
+                      Visibility="{Binding HasPlayable, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="&#x2192; Open Playable Folder"/>
+              </Button>
+
+              <Border Background="{StaticResource BgElevatedBrush}"
+                      CornerRadius="4" Padding="10,8" Margin="0,0,0,10"
+                      Visibility="{Binding HasPlayable, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                  <TextBlock Text="Kalé shop seed" FontSize="10" FontWeight="SemiBold"
+                             Foreground="{StaticResource TextSecondaryBrush}"/>
+                  <TextBlock Text="{Binding Seed}" FontFamily="Consolas" FontSize="10"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             TextWrapping="Wrap" Margin="0,3,0,8"/>
+                  <TextBlock Text="Enemy / class seed" FontSize="10" FontWeight="SemiBold"
+                             Foreground="{StaticResource TextSecondaryBrush}"/>
+                  <TextBlock Text="{Binding EnemySeed}" FontFamily="Consolas" FontSize="10"
+                             Foreground="{StaticResource TextPrimaryBrush}"
+                             TextWrapping="Wrap" Margin="0,3,0,0"/>
+                </StackPanel>
+              </Border>
+
+              <Button Style="{StaticResource SecondaryButton}"
                       Command="{Binding PackageZipCommand}"
                       HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                      Padding="12,10">
-                <TextBlock Text="&#x2B73; Package Zip" FontSize="13"/>
+                      Padding="12,8">
+                <TextBlock Text="&#x2B73; Package Zip"/>
               </Button>
 
               <Button Style="{StaticResource SecondaryButton}"

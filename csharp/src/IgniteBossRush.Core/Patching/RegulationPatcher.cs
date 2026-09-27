@@ -132,8 +132,21 @@ public sealed class RegulationPatcher
         if (Options.Plan is not null)
             ValidatePlan(Options.Plan);
 
-        // (1) Decrypt + parse
-        BND4 bnd = RegulationIo.LoadEldenRing(Options.SourceRegulationPath);
+        // (1) Decrypt + parse. When a 1.17.1 vanilla regulation is supplied,
+        //     rebase first so CharaInitParam 3010/3011 (Idus / Heavy Knight)
+        //     exist and the randomizer can rewrite starting classes.
+        BND4 bnd;
+        RegulationRebaseResult? rebase = null;
+        if (!string.IsNullOrWhiteSpace(Options.VanillaRegulationPath)
+            && File.Exists(Options.VanillaRegulationPath))
+        {
+            rebase = RegulationRebase.Apply(Options.VanillaRegulationPath, Options.SourceRegulationPath);
+            bnd = rebase.Binder;
+        }
+        else
+        {
+            bnd = RegulationIo.LoadEldenRing(Options.SourceRegulationPath);
+        }
 
         // (2) Locate the three PARAMs we edit. Locating up-front fails loud
         //     if the mod's regulation doesn't ship a required table before
@@ -186,7 +199,11 @@ public sealed class RegulationPatcher
             EquipParamGoodsRowsWritten: goodsRows,
             ItemLotParamMapRowsWritten: itemLotRows,
             ShopLineupParamRowsWritten: shopRows,
-            BossDropLotsZeroed:         bossDropRowsZeroed);
+            BossDropLotsZeroed:         bossDropRowsZeroed,
+            RebasedOnVanilla:           rebase is not null,
+            RebaseTablesOverlaid:       rebase?.TablesOverlaid ?? 0,
+            RebaseRowsAdded:            rebase?.RowsAdded ?? 0,
+            RebaseRowsReplaced:         rebase?.RowsReplaced ?? 0);
     }
 
     // ---------------------------------------------------------------------
@@ -694,6 +711,13 @@ public sealed class RegulationPatcherOptions
     /// no-shop patch.
     /// </summary>
     public bool ZeroBossDrops { get; init; } = true;
+
+    /// <summary>
+    /// Vanilla 1.17.1 <c>regulation.bin</c>. When set, the patcher rebases
+    /// the mod regulation on top of it before writing shop / lot rows so
+    /// new starting classes (CharaInitParam 3010 / 3011) survive.
+    /// </summary>
+    public string? VanillaRegulationPath { get; init; }
 }
 
 public sealed record RegulationPatchResult(
@@ -710,4 +734,8 @@ public sealed record RegulationPatchResult(
     /// <summary>Number of <c>ItemLotParam_enemy</c> rows zeroed by the
     /// boss-drops pass. 0 when <see cref="RegulationPatcherOptions.ZeroBossDrops"/>
     /// was false or when no rows in the target range existed.</summary>
-    int BossDropLotsZeroed = 0);
+    int BossDropLotsZeroed = 0,
+    bool RebasedOnVanilla = false,
+    int RebaseTablesOverlaid = 0,
+    int RebaseRowsAdded = 0,
+    int RebaseRowsReplaced = 0);

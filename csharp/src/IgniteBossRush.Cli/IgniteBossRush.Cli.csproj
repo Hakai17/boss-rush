@@ -17,4 +17,27 @@
     <ProjectReference Include="..\IgniteBossRush.Core\IgniteBossRush.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\tools\merge-randomizer.ps1">
+      <Link>merge-randomizer.ps1</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Oodle (oo2core_6_win64.dll) ships with Elden Ring and is required to
+      decompress DCX_KRAK regulation.bin / EMEVD. Drop the DLL at csharp/oo2core_6_win64.dll
+      (gitignored). The GUI and tests already copy it; the CLI needs the same
+      so `igniterush run` can patch the mod.
+    -->
+    <None Include="..\..\oo2core_6_win64.dll"
+          Condition="Exists('..\..\oo2core_6_win64.dll')">
+      <Link>oo2core_6_win64.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
+  </ItemGroup>
+
 </Project>

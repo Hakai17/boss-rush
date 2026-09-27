@@ -95,6 +95,9 @@ public sealed class PipelineRunner
         progress?.Report($"{Hdr(3)} Patching regulation.bin (shop rows{(Options.ZeroBossDrops ? " + zero boss drops" : "")})");
         string sourceRegulation = Path.Combine(Options.SourceModDir, "regulation.bin");
         string patchedRegulationPath = Path.Combine(patchedModDir, "regulation.bin");
+        string? vanillaRegulation = Options.VanillaRegulationPath;
+        if (string.IsNullOrWhiteSpace(vanillaRegulation))
+            vanillaRegulation = RegulationRebase.FindDefaultVanillaRegulation();
         var regOpts = new RegulationPatcherOptions
         {
             SourceRegulationPath = sourceRegulation,
@@ -102,8 +105,20 @@ public sealed class PipelineRunner
             Plan = plan,
             Force = true,
             ZeroBossDrops = Options.ZeroBossDrops,
+            VanillaRegulationPath = vanillaRegulation,
         };
         var regulationResult = new RegulationPatcher(regOpts).Apply();
+        if (regulationResult.RebasedOnVanilla)
+        {
+            progress?.Report($"        rebased on 1.17.1 vanilla: overlaid {regulationResult.RebaseTablesOverlaid} tables "
+                             + $"(+{regulationResult.RebaseRowsAdded} rows, ~{regulationResult.RebaseRowsReplaced} replaced); "
+                             + "CharaInitParam kept from vanilla (Idus Knight / Heavy Knight)");
+        }
+        else
+        {
+            progress?.Report("        1.17.1 vanilla regulation.bin not found — shop patch applied to the 1.16.1 mod regulation "
+                             + "(starting-class swap will fail until a 1.17.1 regulation is supplied)");
+        }
         progress?.Report($"        rows written: {regulationResult.RowsWritten} "
                          + $"(goods={regulationResult.EquipParamGoodsRowsWritten}, "
                          + $"itemLot={regulationResult.ItemLotParamMapRowsWritten}, "
@@ -112,40 +127,26 @@ public sealed class PipelineRunner
             progress?.Report($"        boss-drop ItemLotParam_enemy rows zeroed: "
                              + $"{regulationResult.BossDropLotsZeroed}");
 
-        // --- 3b. menu FMG patch (per-tier shop window titles) ---
-        // Paired with step 3: regulation rows written above reference message
-        // IDs 508001..508009 via menuTitleMsgId. Those IDs must exist in the
-        // menu_dlc02.msgbnd.dcx bundle's GR_MenuText.fmg, or the game renders
-        // the title as the placeholder "?MenuText?". English-only today —
-        // non-English players fall back to the default "Purchase Item"
-        // chrome (vanilla behaviour; no regression).
-        string sourceMenuMsgBnd = Path.Combine(Options.SourceModDir, "msg", "engus",
-                                                RegulationConstants.MenuMsgBndBaseName);
-        string patchedMenuMsgBnd = Path.Combine(patchedModDir, "msg", "engus",
-                                                 RegulationConstants.MenuMsgBndBaseName);
-        if (File.Exists(sourceMenuMsgBnd))
+        // --- 3b. menu FMG patch (shop titles + 1.17.1 class names) ---
+        // ShopLineupParam.menuTitleMsgId 508001..508009 must exist in
+        // GR_MenuText or the shop window renders "?MenuText?". The same
+        // 1.16.1 menu_dlc02 is also missing Idus Knight / Heavy Knight
+        // (288110/288111), which character-create shows as "?text_name?".
+        // Patch every language folder — English strings beat a placeholder.
+        var menuFmg = MenuDlc02Patcher.ApplyAllLanguages(Options.SourceModDir, patchedModDir);
+        if (menuFmg.Applied)
         {
-            var titleEntries = new Dictionary<int, string>();
-            for (int tier = 1; tier <= 9; tier++)
-            {
-                titleEntries[RegulationConstants.BossRushShopTitleMsgId(tier)] =
-                    string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                                  RegulationConstants.BossRushShopTitleFormat, tier);
-            }
-            var fmgResult = FmgPatcher.Apply(
-                sourceMsgBndPath: sourceMenuMsgBnd,
-                outputPath: patchedMenuMsgBnd,
-                targetFmgName: RegulationConstants.BossRushShopTitleFmgName,
-                entries: titleEntries);
-            progress?.Report($"        menu FMG patched: +{fmgResult.EntriesAdded} "
-                             + $"added, ~{fmgResult.EntriesReplaced} replaced "
-                             + $"(target={fmgResult.TargetFmgName}, "
-                             + $"total entries now={fmgResult.TotalEntriesInFmg})");
+            progress?.Report($"        menu FMG patched in {menuFmg.LanguagesPatched} languages: "
+                             + $"+{menuFmg.MenuTextAdded} MenuText added, "
+                             + $"~{menuFmg.MenuTextReplaced} replaced; "
+                             + $"+{menuFmg.LineHelpAdded} LineHelp added, "
+                             + $"~{menuFmg.LineHelpReplaced} replaced "
+                             + "(shop titles 508001-508009 + Idus/Heavy Knight)");
         }
         else
         {
-            progress?.Report($"        menu FMG patch SKIPPED: source {sourceMenuMsgBnd} not found "
-                             + "(shop title will show '?MenuText?' placeholder in-game)");
+            progress?.Report("        menu FMG patch SKIPPED: no msg/*/menu_dlc02.msgbnd.dcx under source "
+                             + "(shop titles show '?MenuText?', Idus/Heavy show '?text_name?')");
         }
 
         // --- 4. boss reward strip ---
@@ -392,6 +393,12 @@ public sealed class PipelineOptions
     /// "ENEMY FELLED" loadout toast.
     /// </summary>
     public bool ZeroBossDrops { get; init; } = true;
+
+    /// <summary>
+    /// Vanilla 1.17.1 <c>regulation.bin</c>. Empty means auto-detect the
+    /// Steam install (or <c>ELDENRING_REGULATION</c>).
+    /// </summary>
+    public string? VanillaRegulationPath { get; init; }
 }
 
 public sealed record PipelineResult(

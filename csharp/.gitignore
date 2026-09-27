@@ -18,6 +18,7 @@ data/output/
 # --- Mod runtime backups ---
 # Pipeline writes these with a timestamp suffix before mutating any file.
 *.prepatched_*
+*.pre1171
 
 # --- Non-redistributable native libraries ---
 # Oodle compression (RAD Game Tools / Epic Games proprietary). Users copy

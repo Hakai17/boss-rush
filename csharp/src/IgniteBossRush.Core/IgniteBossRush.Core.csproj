@@ -8,13 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      SoulsFormatsNEXT is vendored under Phase0_RoundTripTest/vendor/ and already
-      round-trip-verified against this mod's EMEVDs. Reuse the exact same project
-      so every C# piece of the pipeline produces/consumes bytes via the same
-      binary reader/writer.
-    -->
-    <ProjectReference Include="..\..\dependencies\SoulsFormatsNEXT\SoulsFormats\SoulsFormats.csproj" />
+    <ProjectReference Include="..\..\build\SoulsFormats.net8.csproj" />
   </ItemGroup>
 
   <ItemGroup>

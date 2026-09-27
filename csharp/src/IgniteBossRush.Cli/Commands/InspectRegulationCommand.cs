@@ -39,6 +39,17 @@ internal static class InspectRegulationCommand
             return 1;
         }
 
+        PARAM param = PARAM.Read(file.Bytes);
+
+        // --list-ids does not need a PARAMDEF — row headers are enough.
+        if (listIds)
+        {
+            foreach (var r in param.Rows.OrderBy(r => r.ID))
+                Console.WriteLine(r.ID);
+            Console.Error.WriteLine($"({param.Rows.Count} rows total in {table})");
+            return 0;
+        }
+
         string defResourceName = table switch
         {
             "ItemLotParam_map" => RegulationConstants.ItemLotParamDefXml,
@@ -49,18 +60,7 @@ internal static class InspectRegulationCommand
             _ => throw new ArgumentException($"unknown table: {table}"),
         };
         PARAMDEF def = ParamdefLoader.Load(defResourceName);
-        PARAM param = PARAM.Read(file.Bytes);
         param.ApplyParamdef(def);
-
-        // --list-ids: dump all row IDs one per line, no cell details.
-        // Useful for diff'ing which rows exist in regulation A vs B.
-        if (listIds)
-        {
-            foreach (var r in param.Rows.OrderBy(r => r.ID))
-                Console.WriteLine(r.ID);
-            Console.Error.WriteLine($"({param.Rows.Count} rows total in {table})");
-            return 0;
-        }
 
         // --where mode: filter rows by a cell equaling a value
         if (whereArg is not null)

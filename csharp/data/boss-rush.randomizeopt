@@ -1,0 +1,39 @@
+Game: ER
+Version: v0.12.2
+Options: bossbgm changestats crashfix customenemy dlc editnames enemy nightday nohand phasehp scale swapboss tarnished v16 weaponreqs bias:0
+EnemyPreset: >+
+  Classes:
+    Basic: {}
+    Boss: {}
+    MinorBoss:
+      MergeParent: true
+      Pools:
+      - Weight: 1000
+        Pool: default
+    Miniboss:
+      MergeParent: true
+      Pools:
+      - Weight: 1000
+        Pool: default
+    NightMiniboss:
+      MergeParent: true
+      Pools:
+      - Weight: 1000
+        Pool: default
+    DragonMiniboss:
+      MergeParent: true
+      Pools:
+      - Weight: 1000
+        Pool: default
+    Evergaol:
+      MergeParent: true
+      Pools:
+      - Weight: 1000
+        Pool: default
+    Wildlife:
+      InheritParent: true
+    HostileNPC: {}
+    Scarab: {}
+  Options: bosshp regularhp v4
+ItemPreset:
+HelperConfig:

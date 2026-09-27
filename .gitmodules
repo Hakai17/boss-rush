@@ -1,0 +1,3 @@
+[submodule "csharp/dependencies/SoulsFormatsNEXT"]
+	path = csharp/dependencies/SoulsFormatsNEXT
+	url = https://github.com/soulsmods/SoulsFormatsNEXT.git

@@ -13,18 +13,25 @@ igniterush run — full pipeline: shop roll + regulation patch + boss-reward str
   --shop-pool       <path>   shop_pool.json (drives the deterministic shop roll + regulation patch)
   --out-dir         <path>   output workspace (created; will contain generator/,
                              patched_mod/, competition_bundle/ subdirs)
-  --seed            <hex>    optional user-supplied seed (auto-minted if omitted)
+  --seed            <hex>    optional user-supplied shop seed (auto-minted if omitted).
+                             Ignored when --randomize is set: shop + enemies both mint.
+  --vanilla-regulation <path>  optional 1.17.1 game regulation.bin (auto-detected)
   --zero-boss-drops          optional flag. When set, zero the ItemLotParam_enemy
                              boss-drop rows and strip the InitializeCommonEvent
                              dispatch calls from common_func.emevd.dcx. Kills
                              the per-boss "ENEMY FELLED" loadout toast.
+  --randomize                after the pipeline, merge patched_mod into the
+                             Item and Enemy Randomizer and write <out-dir>/playable
+                             (Seed 5 layout: randomizer/ + patched_mod/ + launcher).
+                             Always mints a new Kalé shop seed and a new enemy seed.
+  --randomizer      <path>   folder containing EldenRingRandomizer.exe
 """;
 
     public static int Execute(string[] args)
     {
         var p = new ArgParser(
-            knownOptions: new[] { "--source-mod", "--shop-pool", "--out-dir", "--seed" },
-            knownFlags: new[] { "--help", "--zero-boss-drops" });
+            knownOptions: new[] { "--source-mod", "--shop-pool", "--out-dir", "--seed", "--randomizer", "--vanilla-regulation" },
+            knownFlags: new[] { "--help", "--zero-boss-drops", "--randomize" });
         p.Parse(args);
         if (p.HasFlag("--help"))
         {
@@ -32,15 +39,21 @@ igniterush run — full pipeline: shop roll + regulation patch + boss-reward str
             return 0;
         }
 
+        bool randomize = p.HasFlag("--randomize");
+        string? seedArg = p.Optional("--seed");
+        if (randomize && seedArg is not null)
+            Console.WriteLine("note: --seed is ignored with --randomize (shop is minted together with the enemy seed)");
+
         var opts = new PipelineOptions
         {
             SourceModDir    = p.Required("--source-mod"),
             ShopPoolPath    = p.Required("--shop-pool"),
             WorkDir         = p.Required("--out-dir"),
-            Seed            = p.Optional("--seed") ?? "",
-            SeedOrigin      = p.Optional("--seed") is null
+            Seed            = randomize ? "" : (seedArg ?? ""),
+            SeedOrigin      = randomize || seedArg is null
                 ? "auto-minted (128-bit)" : "user-supplied",
             ZeroBossDrops   = p.HasFlag("--zero-boss-drops"),
+            VanillaRegulationPath = p.Optional("--vanilla-regulation"),
         };
 
         var runner = new PipelineRunner(opts);
@@ -81,6 +94,25 @@ igniterush run — full pipeline: shop roll + regulation patch + boss-reward str
                 : result.KaleMenuAlreadyPresent == true
                     ? "already-present (idempotent re-patch)"
                     : "skipped"));
-        return 0;
+
+        if (!randomize)
+            return 0;
+
+        Console.WriteLine();
+        Console.WriteLine("=== RANDOMIZER MERGE ===");
+        string playable = Path.Combine(opts.WorkDir, "playable");
+        var randomizeArgs = new System.Collections.Generic.List<string>
+        {
+            "--patched-mod", result.PatchedModDir,
+            "--out-dir", playable,
+            "--keep-shop",
+            "--shop-seed", result.Seed,
+        };
+        if (p.Optional("--randomizer") is string randomizerDir)
+        {
+            randomizeArgs.Add("--randomizer");
+            randomizeArgs.Add(randomizerDir);
+        }
+        return RandomizeCommand.Execute(randomizeArgs.ToArray());
     }
 }

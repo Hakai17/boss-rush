@@ -76,87 +76,99 @@ public static class FmgPatcher
         string targetFmgName,
         IReadOnlyDictionary<int, string> entries)
     {
-        if (sourceMsgBndPath is null) throw new ArgumentNullException(nameof(sourceMsgBndPath));
-        if (outputPath is null) throw new ArgumentNullException(nameof(outputPath));
         if (targetFmgName is null) throw new ArgumentNullException(nameof(targetFmgName));
         if (entries is null) throw new ArgumentNullException(nameof(entries));
+
+        return ApplyAll(sourceMsgBndPath, outputPath, new Dictionary<string, IReadOnlyDictionary<int, string>>
+        {
+            [targetFmgName] = entries,
+        })[0];
+    }
+
+    /// <summary>
+    /// Same as <see cref="Apply(string, string, string, IReadOnlyDictionary{int, string})"/>
+    /// for several FMGs in one decompress/compress pass. Keys are FMG
+    /// basenames without extension.
+    /// </summary>
+    public static FmgPatchResult[] ApplyAll(
+        string sourceMsgBndPath,
+        string outputPath,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<int, string>> patches)
+    {
+        if (sourceMsgBndPath is null) throw new ArgumentNullException(nameof(sourceMsgBndPath));
+        if (outputPath is null) throw new ArgumentNullException(nameof(outputPath));
+        if (patches is null) throw new ArgumentNullException(nameof(patches));
+        if (patches.Count == 0)
+            throw new ArgumentException("At least one FMG patch is required.", nameof(patches));
         if (!File.Exists(sourceMsgBndPath))
             throw new FileNotFoundException("Source msgbnd.dcx not found", sourceMsgBndPath);
 
         byte[] raw = File.ReadAllBytes(sourceMsgBndPath);
-        bool wasDcxWrapped = DCX.Is(raw);
         DCX.CompressionInfo? compressionInfo = null;
-        if (wasDcxWrapped)
-        {
-            raw = DCX.Decompress(raw, out var ci);
-            compressionInfo = ci;
-        }
+        if (DCX.Is(raw))
+            raw = DCX.Decompress(raw, out compressionInfo);
 
         if (!BND4.Is(raw))
             throw new InvalidDataException(
                 $"Decompressed payload of '{sourceMsgBndPath}' is not a BND4.");
 
         BND4 container = BND4.Read(raw);
-
-        // Find the target FMG by basename. The file.Name inside the binder
-        // uses FromSoft's Japanese internal path (e.g.
-        // "N:\\GR\\data\\INTERROOT_win64\\msg\\engUS\\GR_MenuText.fmg"),
-        // so we compare on the basename minus extension only.
-        BinderFile? targetFile = container.Files.FirstOrDefault(f =>
-            string.Equals(
-                Path.GetFileNameWithoutExtension(f.Name ?? ""),
-                targetFmgName,
-                StringComparison.OrdinalIgnoreCase));
-        if (targetFile is null)
-            throw new InvalidDataException(
-                $"FMG '{targetFmgName}' not found in bundle '{sourceMsgBndPath}'. "
-                + $"Bundle contains: [{string.Join(", ", container.Files.Select(f => Path.GetFileName(f.Name ?? "<null>")))}].");
-
-        FMG fmg = FMG.Read(targetFile.Bytes);
-
-        int added = 0, replaced = 0;
-        foreach (var (id, text) in entries)
+        var results = new FmgPatchResult[patches.Count];
+        int index = 0;
+        foreach (var (targetFmgName, entries) in patches)
         {
-            // Idempotency: remove any existing entry at the same id first.
-            int existingIdx = fmg.Entries.FindIndex(e => e.ID == id);
-            if (existingIdx >= 0)
+            // file.Name is FromSoft's internal path
+            // ("N:\\GR\\data\\INTERROOT_win64\\msg\\engUS\\GR_MenuText.fmg").
+            BinderFile? targetFile = container.Files.FirstOrDefault(f =>
+                string.Equals(
+                    Path.GetFileNameWithoutExtension(f.Name ?? ""),
+                    targetFmgName,
+                    StringComparison.OrdinalIgnoreCase));
+            if (targetFile is null)
+                throw new InvalidDataException(
+                    $"FMG '{targetFmgName}' not found in bundle '{sourceMsgBndPath}'. "
+                    + $"Bundle contains: [{string.Join(", ", container.Files.Select(f => Path.GetFileName(f.Name ?? "<null>")))}].");
+
+            FMG fmg = FMG.Read(targetFile.Bytes);
+            int added = 0, replaced = 0;
+            foreach (var (id, text) in entries)
             {
-                fmg.Entries.RemoveAt(existingIdx);
-                replaced++;
+                int existingIdx = fmg.Entries.FindIndex(e => e.ID == id);
+                if (existingIdx >= 0)
+                {
+                    fmg.Entries.RemoveAt(existingIdx);
+                    replaced++;
+                }
+                else
+                {
+                    added++;
+                }
+                fmg.Entries.Add(new FMG.Entry(id, text));
             }
-            else
-            {
-                added++;
-            }
-            fmg.Entries.Add(new FMG.Entry(id, text));
+
+            // Sorted by ID so two runs emit the same bytes.
+            fmg.Entries.Sort((a, b) => a.ID.CompareTo(b.ID));
+            targetFile.Bytes = fmg.Write();
+
+            results[index++] = new FmgPatchResult(
+                SourcePath: sourceMsgBndPath,
+                OutputPath: outputPath,
+                TargetFmgName: targetFmgName,
+                DcxCompressionType: compressionInfo?.GetType().Name ?? "(none)",
+                EntriesAdded: added,
+                EntriesReplaced: replaced,
+                TotalEntriesInFmg: fmg.Entries.Count);
         }
-
-        // FMG.Write emits entries in list order. Sort by ID so the on-disk
-        // layout is deterministic across runs — matches what SoulsFormats'
-        // read path produces for vanilla FMGs.
-        fmg.Entries.Sort((a, b) => a.ID.CompareTo(b.ID));
-
-        targetFile.Bytes = fmg.Write();
 
         byte[] outBytes = container.Write();
         if (compressionInfo is not null)
-        {
             outBytes = DCX.Compress(outBytes, compressionInfo);
-        }
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)
                                   ?? throw new InvalidOperationException(
                                       $"output path '{outputPath}' has no directory component"));
         File.WriteAllBytes(outputPath, outBytes);
-
-        return new FmgPatchResult(
-            SourcePath: sourceMsgBndPath,
-            OutputPath: outputPath,
-            TargetFmgName: targetFmgName,
-            DcxCompressionType: compressionInfo?.GetType().Name ?? "(none)",
-            EntriesAdded: added,
-            EntriesReplaced: replaced,
-            TotalEntriesInFmg: fmg.Entries.Count);
+        return results;
     }
 }
 

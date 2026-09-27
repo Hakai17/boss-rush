@@ -23,6 +23,8 @@ Commands:
   patch      Just binary-patch event/*.emevd.dcx given an existing drops.json.
   regulate   Just roll tier_rewards.json + patch regulation.bin (Step 7).
   bundle     Just assemble a competition bundle from existing drops + patches.
+  randomize  Merge patched_mod into the Item and Enemy Randomizer and write a
+             Seed-5 style Mod Engine 2 folder.
   inspect-esd  Dump a TalkESD's state/condition/command structure (diagnostic).
   inspect-emevd  Dump an EMEVD event's instruction list (diagnostic).
   inspect-msgbnd Dump FMG bundle contents (probe for specific IDs).
@@ -64,6 +66,7 @@ Examples:
                 "patch"    => PatchCommand.Execute(rest),
                 "regulate" => RegulateCommand.Execute(rest),
                 "bundle"   => BundleCommand.Execute(rest),
+                "randomize" => RandomizeCommand.Execute(rest),
                 "inspect-esd" => InspectEsdCommand.Execute(rest),
                 "inspect-emevd" => InspectEmevdCommand.Execute(rest),
                 "inspect-msgbnd" => InspectMsgbndCommand.Execute(rest),
