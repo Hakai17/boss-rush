@@ -364,6 +364,16 @@ Copy-Item -LiteralPath (Join-Path $RandomizerDir "dll\RandomizerHelper.dll") -De
 if (Test-Path -LiteralPath $IgniteDll) { Copy-Item -LiteralPath $IgniteDll -Destination $dllDir -Force }
 if (Test-Path -LiteralPath $IgniteDllConfig) { Copy-Item -LiteralPath $IgniteDllConfig -Destination $dllDir -Force }
 if (Test-Path -LiteralPath $HelperIni) { Copy-Item -LiteralPath $HelperIni -Destination $dllDir -Force }
+# The overlay reads dll/data/<lang>/bosses.json for the BOSSES x/y counter.
+# Without that folder it stays at "-/0".
+$igniteData = Join-Path (Split-Path -Parent $IgniteDll) "data"
+if (Test-Path -LiteralPath $igniteData) {
+    Write-Step "Copying overlay boss list"
+    & robocopy $igniteData (Join-Path $dllDir "data") /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy overlay data failed with exit $LASTEXITCODE" }
+} else {
+    Write-Step "Overlay boss list not found next to Ignite_Boss_Rush.dll (counter will show -/0)"
+}
 
 $engineSrc = Join-Path $RandomizerDir "diste\ModEngine"
 Copy-Item -LiteralPath (Join-Path $engineSrc "modengine2_launcher.exe") -Destination $OutDir -Force

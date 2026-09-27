@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
@@ -291,9 +292,139 @@ public sealed class MainViewModel : ObservableObject
         _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _tickTimer.Tick += (_, _) => UpdateElapsedDisplays();
 
-        // Check data folder on startup.
+        // Check data folder on startup, then bring back the last seed so
+        // closing the window does not force another generate.
         ValidateDataFolder();
+        RestoreLastSession();
     }
+
+    private string SessionPath => Path.Combine(_workDir, "session.json");
+
+    /// <summary>Write the current seed and settings. Called when a run finishes
+    /// and when the window closes.</summary>
+    public void SaveSession()
+    {
+        try
+        {
+            Directory.CreateDirectory(_workDir);
+            var saved = new SavedSession
+            {
+                Seed = Seed,
+                EnemySeed = EnemySeed,
+                IncludeRandomizer = IncludeRandomizer,
+                ZeroBossDrops = ZeroBossDrops,
+                RandomizerDir = RandomizerDir,
+                PlayablePath = PlayablePath,
+                PatchedModPath = PatchedModPath,
+                BundlePath = BundlePath,
+                BundleRoot = BundleRoot,
+                TierRewardsFingerprint = TierRewardsFingerprint,
+                PatchedRegulationPath = PatchedRegulationPath,
+                RegulationSummary = RegulationSummary,
+                ArtifactTree = ArtifactTree,
+                StatusText = StatusText,
+                LogText = LogText,
+                PipelineSucceeded = PipelineSucceeded,
+            };
+            File.WriteAllText(SessionPath, JsonSerializer.Serialize(saved, SessionJson));
+        }
+        catch
+        {
+            // A failed save must not block closing the window.
+        }
+    }
+
+    private void RestoreLastSession()
+    {
+        SavedSession? saved = null;
+        if (File.Exists(SessionPath))
+        {
+            try
+            {
+                saved = JsonSerializer.Deserialize<SavedSession>(File.ReadAllText(SessionPath), SessionJson);
+            }
+            catch
+            {
+                saved = null;
+            }
+        }
+
+        if (saved is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(saved.RandomizerDir))
+                RandomizerDir = saved.RandomizerDir;
+            ZeroBossDrops = saved.ZeroBossDrops;
+            if (saved.IncludeRandomizer != IncludeRandomizer)
+                IncludeRandomizer = saved.IncludeRandomizer;
+            if (!string.IsNullOrWhiteSpace(saved.Seed))
+                Seed = saved.Seed;
+            EnemySeed = saved.EnemySeed;
+            PatchedModPath = saved.PatchedModPath;
+            BundlePath = saved.BundlePath;
+            BundleRoot = saved.BundleRoot;
+            TierRewardsFingerprint = saved.TierRewardsFingerprint;
+            PatchedRegulationPath = saved.PatchedRegulationPath;
+            RegulationSummary = saved.RegulationSummary;
+            ArtifactTree = saved.ArtifactTree;
+        }
+
+        string playable = saved?.PlayablePath ?? "";
+        if (string.IsNullOrWhiteSpace(playable) || !Directory.Exists(playable))
+            playable = Path.Combine(_workDir, "playable");
+
+        bool playableOk = File.Exists(Path.Combine(playable, "launchmod_rando.bat"))
+                          && Directory.Exists(Path.Combine(playable, "randomizer"));
+        if (!playableOk)
+        {
+            RaiseRunCanExecute();
+            return;
+        }
+
+        PlayablePath = playable;
+        RandomizerSeedInfo? seeds = RandomizerMerge.ReadSeedInfo(playable);
+        if (seeds is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(seeds.EnemySeed))
+                EnemySeed = seeds.EnemySeed;
+            if (!string.IsNullOrWhiteSpace(seeds.ShopSeed)
+                && !seeds.ShopSeed.StartsWith("(kept", StringComparison.OrdinalIgnoreCase))
+                Seed = seeds.ShopSeed;
+        }
+
+        PipelineSucceeded = true;
+        ProgressPercent = 100;
+        CurrentStageIndex = Stages.Count;
+        foreach (PipelineStageProgress stage in Stages)
+        {
+            stage.State = StageState.Completed;
+            stage.Detail = "Restored";
+        }
+
+        if (!string.IsNullOrEmpty(saved?.LogText))
+        {
+            _logBuf.Clear();
+            _logBuf.Append(saved.LogText);
+            if (!_logBuf.ToString().EndsWith(Environment.NewLine, StringComparison.Ordinal))
+                _logBuf.AppendLine();
+            RaiseLog();
+        }
+
+        AppendLog("Restored the last playable seed. Launch or package it without generating again.");
+        AppendLog($"Playable folder: {playable}");
+        if (!string.IsNullOrEmpty(EnemySeed))
+            AppendLog($"Enemy seed:      {EnemySeed}");
+        if (!string.IsNullOrEmpty(Seed))
+            AppendLog($"Shop seed:       {Seed}");
+        StatusText = "Last playable seed restored";
+        RaiseRunCanExecute();
+    }
+
+    private static readonly JsonSerializerOptions SessionJson = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
 
     // ---- data folder validation -------------------------------------------
 
@@ -493,6 +624,7 @@ public sealed class MainViewModel : ObservableObject
 
             PipelineSucceeded = true;
             ProgressPercent = 100;
+            SaveSession();
         }
         catch (Exception ex)
         {
@@ -656,17 +788,30 @@ public sealed class MainViewModel : ObservableObject
     {
         if (!PipelineSucceeded) return;
 
-        // Use the actual patched mod path reported by the pipeline result.
+        // A playable seed is the Seed 5 layout: randomizer/ (enemy + class
+        // placements) loaded under patched_mod/, plus the Mod Engine launcher.
+        // Prefer the folder from this run, then the last one already on disk,
+        // so a reopen still packages randomized enemies instead of the
+        // template + mod/ archive.
+        string playableDir = HasPlayable ? PlayablePath : Path.Combine(_workDir, "playable");
+        bool packagePlayable = File.Exists(Path.Combine(playableDir, "launchmod_rando.bat"))
+                               && Directory.Exists(Path.Combine(playableDir, "randomizer"));
         string patchedModDir = PatchedModPath;
-        if (string.IsNullOrEmpty(patchedModDir) || !Directory.Exists(patchedModDir))
+        if (HasPlayable && !packagePlayable)
+        {
+            MessageBox.Show(
+                $"Playable folder is missing the randomizer layout:\n{playableDir}",
+                "Package failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        else if (string.IsNullOrEmpty(patchedModDir) || !Directory.Exists(patchedModDir))
         {
             MessageBox.Show(
                 $"Patched mod folder not found:\n{patchedModDir}",
                 "Package failed", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-
-        if (!Directory.Exists(_templateDir))
+        else if (!Directory.Exists(_templateDir))
         {
             MessageBox.Show(
                 $"Template folder not found:\n{_templateDir}\n\nPlace your static files (Changelog.txt, README.txt, etc.) here.",
@@ -674,41 +819,53 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        // Ask user where to save the zip.
-        // Use the bundle_root hash (first 8 chars) as the filename — ties
-        // the zip directly to the competition integrity fingerprint.
-        string hashTag = BundleRoot.Length >= 8 ? BundleRoot[..8] : BundleRoot;
+        string enemyTag = EnemySeed;
+        if (packagePlayable && string.IsNullOrWhiteSpace(enemyTag))
+            enemyTag = RandomizerMerge.ReadSeedInfo(playableDir)?.EnemySeed ?? "";
+        string tag = packagePlayable && !string.IsNullOrWhiteSpace(enemyTag)
+            ? enemyTag
+            : (BundleRoot.Length >= 8 ? BundleRoot[..8] : BundleRoot);
+        foreach (char c in Path.GetInvalidFileNameChars())
+            tag = tag.Replace(c, '_');
+        tag = tag.Trim();
+        if (tag.Length == 0)
+            tag = "seed";
+
         var dlg = new SaveFileDialog
         {
-            Title = "Save Boss Rush package",
+            Title = packagePlayable ? "Save playable seed" : "Save Boss Rush package",
             Filter = "Zip archive (*.zip)|*.zip",
-            FileName = $"BossRushArena_{hashTag}.zip",
+            FileName = $"BossRushArena_{tag}.zip",
         };
         if (dlg.ShowDialog() != true) return;
 
         string zipPath = dlg.FileName;
-        StatusText = "Packaging zip...";
+        StatusText = packagePlayable ? "Packaging playable seed..." : "Packaging zip...";
 
         try
         {
             await Task.Run(() =>
             {
-                // Delete existing zip if user chose to overwrite.
                 if (File.Exists(zipPath))
                     File.Delete(zipPath);
 
                 using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create);
-
-                // Add template contents (Changelog.txt, README.txt, .me3, Optional modifiers/, etc.)
-                AddDirectoryToZip(zip, _templateDir, "");
-
-                // Add patched mod as "mod/" in the zip root.
-                AddDirectoryToZip(zip, patchedModDir, "mod");
+                if (packagePlayable)
+                {
+                    AddDirectoryToZip(zip, playableDir, "");
+                }
+                else
+                {
+                    AddDirectoryToZip(zip, _templateDir, "");
+                    AddDirectoryToZip(zip, patchedModDir, "mod");
+                }
             });
 
             StatusText = "Zip packaged successfully";
             AppendLog("");
-            AppendLog($"=== ZIP PACKAGED ===");
+            AppendLog(packagePlayable
+                ? "=== PLAYABLE ZIP PACKAGED (randomizer + patched_mod + launcher) ==="
+                : "=== ZIP PACKAGED ===");
             AppendLog($"  {zipPath}");
 
             // Open the folder containing the zip.
@@ -743,4 +900,24 @@ public sealed class MainViewModel : ObservableObject
             zip.CreateEntryFromFile(filePath, entryName, CompressionLevel.Optimal);
         }
     }
+}
+
+internal sealed class SavedSession
+{
+    public string Seed { get; set; } = "";
+    public string EnemySeed { get; set; } = "";
+    public bool IncludeRandomizer { get; set; } = true;
+    public bool ZeroBossDrops { get; set; } = true;
+    public string RandomizerDir { get; set; } = "";
+    public string PlayablePath { get; set; } = "";
+    public string PatchedModPath { get; set; } = "";
+    public string BundlePath { get; set; } = "";
+    public string BundleRoot { get; set; } = "";
+    public string TierRewardsFingerprint { get; set; } = "";
+    public string PatchedRegulationPath { get; set; } = "";
+    public string RegulationSummary { get; set; } = "";
+    public string ArtifactTree { get; set; } = "";
+    public string StatusText { get; set; } = "";
+    public string LogText { get; set; } = "";
+    public bool PipelineSucceeded { get; set; }
 }

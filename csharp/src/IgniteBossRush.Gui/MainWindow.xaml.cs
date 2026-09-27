@@ -9,6 +9,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Closing += (_, _) =>
+        {
+            if (DataContext is ViewModels.MainViewModel vm)
+                vm.SaveSession();
+        };
     }
 
     /// <summary>

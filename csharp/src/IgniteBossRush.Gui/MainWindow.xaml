@@ -322,7 +322,8 @@
               <Button Style="{StaticResource SecondaryButton}"
                       Command="{Binding PackageZipCommand}"
                       HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                      Padding="12,8">
+                      Padding="12,8"
+                      ToolTip="Zip the playable folder: randomizer, patched mod, and the Mod Engine launcher">
                 <TextBlock Text="&#x2B73; Package Zip"/>
               </Button>
 
