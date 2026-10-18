@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BossRush.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "run --source-mod \"C:\\path\\to\\mod\" --flag-pool step4-flagpool\\flag_pool.json --exclusions step3-exclusions\\exclusions.json --boss-catalog step2-bosscatalog\\boss_catalog.json --shop-pool step5-shoppool\\shop_pool.json --out-dir out\\kale-test"
+    }
+  }
+}

@@ -1,12 +1,10 @@
-# IgniteBossRush (C# port)
+# Boss Rush (C# tool)
 
-A standalone re-implementation of the Ignite Rush seeded-competition tool
-in C# / .NET 8. Produces byte-identical drop plans, the same EMEVD binary
-patches, and the same tamper-evident bundles as the legacy Python pipeline
-— but ships as a single Windows `.exe` with a WPF GUI so organizers don't
-need Python, Node, or `yabber` on their machines.
+.NET 8 GUI and CLI that roll a seeded Kalé shop, patch the Boss Rush mod,
+and write a playable `patched_mod` folder. The RNG domain tag is
+`BossRush-v1`, so seeds from the previous generator do not match.
 
-License: GPL-3.0-only (matches the rest of the repo).
+License: GPL-3.0-only. See [LICENSE.md](../LICENSE.md).
 
 ---
 
@@ -14,16 +12,16 @@ License: GPL-3.0-only (matches the rest of the repo).
 
 ```
 csharp/
-├── IgniteBossRush.sln                 dotnet sln (CLI + GUI + Core + Tests)
+├── BossRush.sln                 dotnet sln (CLI + GUI + Core + Tests)
 ├── Directory.Build.props              shared TargetFramework + LangVersion
 ├── src/
-│   ├── IgniteBossRush.Core/           pure library — RNG, canonical JSON,
+│   ├── BossRush.Core/           pure library — RNG, canonical JSON,
 │   │                                   drop generator, EMEVD binary patcher,
 │   │                                   bundle builder, pipeline orchestrator
-│   ├── IgniteBossRush.Cli/            console front-end (`igniterush.exe`)
-│   └── IgniteBossRush.Gui/            WPF shell (`IgniteRush.exe`)
+│   ├── BossRush.Cli/            console front-end (`bossrush.exe`)
+│   └── BossRush.Gui/            WPF shell (`BossRush.exe`)
 └── tests/
-    └── IgniteBossRush.Tests/          xUnit — PRNG vectors, canonical
+    └── BossRush.Tests/          xUnit — PRNG vectors, canonical
                                          serialization, EMEVD byte layouts,
                                          generator determinism + gold-master
 ```
@@ -56,25 +54,20 @@ dotnet build -c Release
 dotnet test  -c Release
 ```
 
-The tests include a gold-master assertion: if the repo's
-`step2-flag-pool/`, `step3-exclusions/`, and `step4-boss-catalog/` folders
-are present, `GoldenFingerprintTests` re-runs the seeded drop generation
-against seed `test-seed-alpha-2026` and asserts the canonical SHA-256
-equals `bd406b07556272fe5a9060301ec96abd8b7227eca6426ce497f8bcf44bafacf0`
-— the same value stamped into
-`step5-generator/sample_output/integrity.sha256`.
-
-That's the single strongest cross-implementation check: if it passes, the
-C# generator is a drop-in replacement for `generate.py`.
+The tests cover PRNG determinism, canonical serialization, and EMEVD byte
+layouts. `GoldenFingerprintTests` runs only when `step2-flag-pool/`,
+`step3-exclusions/`, and `step4-boss-catalog/` are present. It checks that
+seed `test-seed-alpha-2026` is stable under the `BossRush-v1` domain tag
+and that the fingerprint is not the retired previous-generator hash.
 
 ---
 
 ## 4. Publish a single-file GUI executable
 
-To produce `IgniteRush.exe` for organizers to hand to non-developers:
+To produce `BossRush.exe` for organizers to hand to non-developers:
 
 ```
-dotnet publish src/IgniteBossRush.Gui/IgniteBossRush.Gui.csproj ^
+dotnet publish src/BossRush.Gui/BossRush.Gui.csproj ^
     -c Release ^
     -r win-x64 ^
     --self-contained true ^
@@ -83,13 +76,13 @@ dotnet publish src/IgniteBossRush.Gui/IgniteBossRush.Gui.csproj ^
     -o publish/gui
 ```
 
-Output: `publish/gui/IgniteRush.exe` (~70 MB self-extracting bundle).
+Output: `publish/gui/BossRush.exe` (~70 MB self-extracting bundle).
 No .NET runtime install required on the target machine.
 
 For the CLI (smaller — no WPF dependencies):
 
 ```
-dotnet publish src/IgniteBossRush.Cli/IgniteBossRush.Cli.csproj ^
+dotnet publish src/BossRush.Cli/BossRush.Cli.csproj ^
     -c Release ^
     -r win-x64 ^
     --self-contained true ^
@@ -97,7 +90,7 @@ dotnet publish src/IgniteBossRush.Cli/IgniteBossRush.Cli.csproj ^
     -o publish/cli
 ```
 
-Output: `publish/cli/igniterush.exe`. Same behavior as the GUI, but suitable
+Output: `publish/cli/bossrush.exe`. Same behavior as the GUI, but suitable
 for scripting / CI.
 
 ---
@@ -106,39 +99,26 @@ for scripting / CI.
 
 ### 5.1 GUI
 
-Double-click `IgniteRush.exe`. Fill in (or paste):
+Double-click `BossRush.exe`. The window reads a `data/` folder next to the executable:
 
-1. **Seed** — hex string, or click **Mint seed** to generate a
-   cryptographically-random 128-bit one.
-2. **Source mod folder** — the unpacked `Ignite Rush Alpha Version v3.6.4
-   Boss Arena/` directory. Must contain `event/`.
-3. **flag_pool.json / exclusions.json / boss_catalog.json** — pointers to
-   the step2/3/4 outputs the Python pipeline already produces (shipped in
-   this repo under `step2-flag-pool/`, `step3-exclusions/`,
-   `step4-boss-catalog/`).
-4. **Output workspace** — any empty folder the tool may scribble into.
+1. `data/mod/` — source mod (`event/` and `regulation.bin`).
+2. `data/shop_pool.json` — shop roll input.
+3. **Shop seed** — hex string, or **Mint**. Leave it blank to mint one on generate.
+4. **Zero boss-drop loot** — optional. Clears the per-boss "ENEMY FELLED" toast.
 
-Click **Run pipeline**. The fingerprint panel populates with:
-
-- `drops.canonical` — SHA-256 of the canonical drop table bytes.
-- `artifact_tree`   — SHA-256 of the per-file hash manifest.
-- `bundle_root`     — SHA-256 tying the two above together. **Pre-commit
-  this one value** before anyone runs the seed.
+Click **Generate Bundle**. Output lands in `data/output/`. The log prints the `patched_mod` path to merge by hand in the official item and enemy randomizer.
 
 ### 5.2 CLI
 
 ```
-igniterush run ^
+bossrush run ^
     --seed         <hex>                    (omit to auto-mint)
-    --source-mod   "<path>\\Ignite Rush Alpha Version v3.6.4 Boss Arena" ^
-    --flag-pool    "<repo>\\step2-flag-pool\\flag_pool.json" ^
-    --exclusions   "<repo>\\step3-exclusions\\exclusions.json" ^
-    --boss-catalog "<repo>\\step4-boss-catalog\\boss_catalog.json" ^
+    --source-mod   "<path>\mod" ^
+    --shop-pool    "<path>\shop_pool.json" ^
     --out-dir      "<workspace>"
 ```
 
-Sub-commands `generate`, `patch`, and `bundle` run the three stages
-independently; see `igniterush help` for the full flag list.
+`bossrush help` lists the other commands. `bossrush randomize` only prints the manual merge steps.
 
 ---
 
@@ -163,16 +143,15 @@ After a successful run:
     └── README.txt
 ```
 
-`patched_mod/` is what you hand to Matt's Randomizer via `--merge`; the
-`competition_bundle/` is what you publish as the tamper-evident artifact.
+`patched_mod/` is the folder you merge yourself in the official Elden Ring
+Item and Enemy Randomizer (Merge other mod). This tool does not launch
+that program. `competition_bundle/` is the tamper-evident artifact.
 
 ---
 
-## 7. Cross-validation against the Python pipeline
+## 7. Item and enemy randomizer
 
-The Python pipeline under `step5-generator/`, `step6-patcher/`, and
-`step7-bundle/` is kept in-tree as an independent re-implementation.
-Running both and comparing the resulting `drops.canonical` and
-`bundle_root` hashes for the same seed is the recommended sanity check
-before a live competition — if they disagree, file a bug before
-publishing.
+Enemy placements and starting classes stay in the official Elden Ring Item
+and Enemy Randomizer. After `bossrush run`, open that program and merge
+`patched_mod/`. `data/boss-rush.randomizeopt` is an exported options file
+you can import there. Do not redistribute the randomizer with this tool.

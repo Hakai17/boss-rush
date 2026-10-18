@@ -1,49 +1,38 @@
-# 🔥 Ignite Boss Rush
+# Boss Rush
 
-Ignite Boss Rush is a competitive overhaul of the **Elden Ring Boss Arena Progression Mod** by **PositronCannon**.
+Boss Rush is an Elden Ring boss-arena mod, and a new project.
 
-Created by **lazyhelios**, with help from **Shura125** and **Psiphicode**.
+The gameplay base is the **Elden Ring Boss Arena Progression Mod** by **PositronCannon**. This repository continues the boss-rush work from Ignite Boss Rush, developed by **lazyhelios**, **Shura125**, and **Psiphicode**.
 
-> This project is not an original base mod.
-> It builds upon RepO98 and PositronCannon’s work with permission.
+## Features
 
----
+- Tiered boss progression, with excess bosses removed from tiers
+- Kalé shop: OpenPuppetShop and Starlight Shards, head armor in the talisman slots, and Ash of War: Kick from the start
+- Roundtable Hold one-shot care package
+- Torrent in the arenas
+- Seeded shop rolls and a patched mod folder for Mod Engine 2
+- .NET 8 GUI and CLI, with saved session preferences
+- Elden Ring 1.17.1 starting-class names when you merge the mod in the official item and enemy randomizer
 
-## 🚧 Status
+## Item and enemy randomizer
 
-**Alpha**
+Enemy placements and starting classes come from the official [Elden Ring Item and Enemy Randomizer](https://www.nexusmods.com/eldenring/mods/428) by thefifthmatt. Boss Rush does not include that program and does not start it.
 
-The largest feature currently in development:
+After the tool writes `patched_mod`:
 
-* 🔄 **Standardized item drops across players**
-  (Drops are currently random per player.)
+1. Open `EldenRingRandomizer.exe` from your own install.
+2. Use **Merge other mod** and select that folder.
+3. Optionally import [`csharp/data/boss-rush.randomizeopt`](csharp/data/boss-rush.randomizeopt). That file is an exported options preset (enemy randomizer, tarnished starting classes, stat changes; items are not randomized).
 
-Beta will focus on drop parity, stability, and more QoL Updates.
+## Build
 
----
+The generator is documented in [`csharp/README.md`](csharp/README.md). From `csharp/`:
 
-## ✨ Features
+```
+dotnet build -c Release
+dotnet test -c Release
+```
 
-### Current
+## License
 
-* Tiered Boss Progression
-* Removal of Excess Bosses from Tiers
-* Streamlined Shop
-* Ash of War: Kick available from Game Start
-
-### Upcoming
-
-* Standardized drops
-* Configurable Arenas
-* Torrent Available Everywhere
-* Better Arenas
-
----
-
-## ▶ How To Play
-
-For the full setup guide, casual races, providing feedback and future event information:
-
-👉 **Discord:** *[Ignite](https://discord.gg/ignitesouls)*
-
----
+GPL-3.0-only. See [LICENSE.md](LICENSE.md).

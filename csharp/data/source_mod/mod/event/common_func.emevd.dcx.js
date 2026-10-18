@@ -2921,7 +2921,7 @@ $Event(90009950, Default, function() {
         $InitializeCommonEvent(0, 90009966);
 });
 
-//prog sequential mode tier 1 (all bosses) - 5-boss tier (Ignite Rush)
+//prog sequential mode tier 1 (all bosses) - 5-boss tier (Boss Rush)
 $Event(90009951, Default, function() {
     //Soldier of Godrick
     if (!EventFlag(1049304100))

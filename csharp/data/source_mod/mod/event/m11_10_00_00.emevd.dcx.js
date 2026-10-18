@@ -1489,7 +1489,7 @@ $Event(11107715, Default, function() {
 });
     
 //enable flags for tier completion marks
-//tier 1 - 5-boss tier (Ignite Rush):
+//tier 1 - 5-boss tier (Boss Rush):
 //  Soldier of Godrick (4100), Guardian Golem (4105), Cemetery Shade WP (4110),
 //  Scaly Misbegotten (4114), Tibia Mariner Limgrave (4120)
 $Event(11107716, Default, function() {

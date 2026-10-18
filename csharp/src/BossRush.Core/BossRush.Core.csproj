@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BossRush.Core</RootNamespace>
+    <AssemblyName>BossRush.Core</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\build\SoulsFormats.net8.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      SHAKE-256 is provided by System.Security.Cryptography.Shake256 which
+      ships natively in .NET 8. It's spec-compliant FIPS 202, so the output
+      bytes are identical to Python's hashlib.shake_256 — the determinism
+      guarantee the pipeline relies on.
+
+      Previously we used BouncyCastle.Cryptography 2.4.0 here, but that
+      package's XOF surface (ShakeDigest / IXof) varies between minor
+      versions (DoFinal-3-arg, DoOutput, etc. are intermittently present),
+      which made the call site brittle. Shake256 has a stable, documented
+      HashAlgorithm-style API and is already pulled in by the runtime.
+    -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose internals (InstructionFactory, PatchConstants, low-level
+         helpers) to the xUnit test assembly so we can byte-audit ArgData
+         layouts without promoting them to the public Core API. -->
+    <InternalsVisibleTo Include="BossRush.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Paramdex PARAMDEF XMLs, bundled as embedded resources so the Phase B
+      regulation.bin patcher can interpret cells in the three PARAM tables it
+      mutates (EquipParamGoods, ItemLotParam_map, ShopLineupParam) without
+      requiring an on-disk Paramdex checkout at runtime.
+
+      Source: soulsmods/Paramdex@master/ER/Defs/. Do not edit the files in
+      place — if a definition needs updating, re-copy from the upstream
+      repository so we stay byte-compatible with Smithbox/Yabber consumers
+      working on the same regulation.bin.
+    -->
+    <EmbeddedResource Include="Patching\Paramdefs\EquipMtrlSetParam.xml" />
+    <EmbeddedResource Include="Patching\Paramdefs\EquipParamGoods.xml" />
+    <EmbeddedResource Include="Patching\Paramdefs\ItemLotParam.xml" />
+    <EmbeddedResource Include="Patching\Paramdefs\ShopLineupParam.xml" />
+  </ItemGroup>
+
+</Project>
