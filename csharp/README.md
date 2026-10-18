@@ -108,6 +108,8 @@ Double-click `BossRush.exe`. The window reads a `data/` folder next to the execu
 
 Click **Generate Bundle**. Output lands in `data/output/`. The log prints the `patched_mod` path to merge by hand in the official item and enemy randomizer.
 
+The practice overlay ships beside the executable as `dll/BossRush.dll` (with `config.toml` and `dll/data/<language>/bosses.json`). Merge other mod does not load it. In the randomizer, use **Add dll mod**, select `dll/BossRush.dll`, then **Launch Elden Ring**.
+
 ### 5.2 CLI
 
 ```

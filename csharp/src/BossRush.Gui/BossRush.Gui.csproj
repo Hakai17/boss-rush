@@ -103,6 +103,22 @@
     The NuGet cache path uses $(NuGetPackageRoot) which MSBuild resolves at
     build time; the version is hard-coded to match the PackageReference.
   -->
+  <!--
+    Practice overlay. Stays a separate DLL: the randomizer's Merge other mod
+    loads game files only, and Launch Elden Ring loads this through Add dll mod.
+    config.toml and data/<lang>/bosses.json must sit next to BossRush.dll,
+    which is how the overlay finds them. ExcludeFromSingleFile keeps the
+    folder out of the self-contained exe.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\data\overlay\**\*">
+      <Link>dll\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll"
              Condition="Exists('$(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll')">
@@ -156,6 +172,24 @@
              Condition="'@(_LibzstdSource)' != ''" />
     <Warning Text="libzstd.dll not found at $(NuGetPackageRoot)zstdnet\1.4.5\build\x64\libzstd.dll — stage 3/6 will fail at runtime with DllNotFoundException for ZstdNet."
              Condition="'@(_LibzstdSource)' == ''" />
+  </Target>
+
+  <!--
+    Same PublishSingleFile gap as the mod data: a native DLL plus its json
+    sidecars sourced outside the csproj tree can be dropped from publish/.
+    Mirror data/overlay into $(PublishDir)dll so Add dll mod has a real file.
+  -->
+  <Target Name="CopyOverlayAfterPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_OverlaySource Include="..\..\data\overlay\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_OverlaySource)"
+          DestinationFiles="@(_OverlaySource->'$(PublishDir)dll\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(_OverlaySource)' != ''" />
+    <Message Importance="high"
+             Text="CopyOverlayAfterPublish: mirrored @(_OverlaySource->Count()) files into $(PublishDir)dll\"
+             Condition="'@(_OverlaySource)' != ''" />
   </Target>
 
 </Project>

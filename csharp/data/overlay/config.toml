@@ -1,0 +1,36 @@
+﻿# Boss Rush - overlay config
+#
+# Place this file next to BossRush.dll. It is optional; if missing,
+# defaults apply. Changes take effect on the next game launch (the DLL
+# reads this file once at startup).
+
+[hotkeys]
+# Key that toggles the expanded splits panel.
+#
+# Accepted values (case-insensitive):
+#   Single character : "=", "`", "[", "]", ";", "'", ",", ".", "/", "\", "-"
+#   Letter           : "A" .. "Z"
+#   Digit            : "0" .. "9"
+#   Function key     : "F1" .. "F24"
+#   Named key        : "Space", "Enter", "Tab", "Escape", "Backspace",
+#                      "Delete", "Insert", "Home", "End",
+#                      "PageUp", "PageDown",
+#                      "Up", "Down", "Left", "Right"
+#
+# If the value is missing or unrecognized, the overlay falls back to the
+# default shown in the comment.
+expand      = "="           # default: "="
+scroll_up   = "PageUp"      # default: "PageUp"
+scroll_down = "PageDown"    # default: "PageDown"
+
+[pace]
+# Show pace / projection metrics.
+#   When true:
+#     * Compact HUD shows "PROJECTED HH:MM:SS" under the timer.
+#     * Expanded splits: each completed tier header shows its
+#       cumulative completion IGT.
+#     * Summary screen adds a "TIER PACE" block listing each
+#       tier's completion time in two columns.
+#   When false, none of these appear - the overlay is just
+#   timer / deaths / bosses / splits, no projection anywhere.
+enabled = true

@@ -1,0 +1,101 @@
+[
+  {
+    "region_name": "Tier 1",
+    "regions": [],
+    "bosses": [
+      { "boss": "Soldier of Godrick", "place": "Stranded Graveyard", "flag_id": 1049304100 },
+      { "boss": "Guardian Golem", "place": "Highroad Cave", "flag_id": 1049304105 },
+      { "boss": "Cemetery Shade", "place": "Tombsward Catacombs", "flag_id": 1049304110 },
+      { "boss": "Scaly Misbegotten", "place": "Morne Tunnel", "flag_id": 1049304114 },
+      { "boss": "Tibia Mariner", "place": "Summonwater Village", "flag_id": 1049304120 }
+    ]
+  },
+  {
+    "region_name": "Tier 2",
+    "regions": [],
+    "bosses": [
+      { "boss": "Erdtree Avatar", "place": "Minor Erdtree", "flag_id": 1049304124 },
+      { "boss": "Night's Cavalry", "place": "Castle Morne Rampart", "flag_id": 1049304125 },
+      { "boss": "Dragonkin Soldier of Nokstella", "place": "", "flag_id": 1049304129 },
+      { "boss": "Crystalian (Ringblade)", "place": "Raya Lucaria Crystal Tunnel", "flag_id": 1049304136 },
+      { "boss": "Ancestor Spirit", "place": "Siofra River Bank", "flag_id": 1049304131 }
+    ]
+  },
+  {
+    "region_name": "Tier 3",
+    "regions": [],
+    "bosses": [
+      { "boss": "Crystalians (Staff & Spear)", "place": "Academy Crystal Cave", "flag_id": 1049304147 },
+      { "boss": "Erdtree Burial Watchdog", "place": "Cliffbottom Catacombs", "flag_id": 1049304138 },
+      { "boss": "Royal Knight Loretta", "place": "Caria Manor", "flag_id": 1049304143 },
+      { "boss": "Magma Wyrm Makar", "place": "Ruin-Strewn Precipice", "flag_id": 1049304154 },
+      { "boss": "Rennala, Queen of the Full Moon", "place": "", "flag_id": 1049304155, "rememberance": 2 }
+    ]
+  },
+  {
+    "region_name": "Tier 4",
+    "regions": [],
+    "bosses": [
+      { "boss": "Frenzied Duelist", "place": "Gaol Cave", "flag_id": 1049304150 },
+      { "boss": "Fallingstar Beast", "place": "Sellia Crystal Tunnel", "flag_id": 1049304149 },
+      { "boss": "Death Rite Bird", "place": "Gate Town North", "flag_id": 1049304161 },
+      { "boss": "Valiant Gargoyles", "place": "Siofra Aqueduct", "flag_id": 1049304214 },
+      { "boss": "Regal Ancestor Spirit", "place": "Hallowhorn Grounds", "flag_id": 1049304188, "rememberance": 7 }
+    ]
+  },
+  {
+    "region_name": "Tier 5",
+    "regions": [],
+    "bosses": [
+      { "boss": "Glintstone Dragon Smarag", "place": "Temple Quarter", "flag_id": 1049304180 },
+      { "boss": "Onyx Lord", "place": "Sealed Tunnel", "flag_id": 1049304184 },
+      { "boss": "Morgott, the Omen King", "place": "Elden Throne", "flag_id": 1049304218, "rememberance": 4 },
+      { "boss": "Astel, Naturalborn of the Void", "place": "Grand Cloister", "flag_id": 1049304216, "rememberance": 8 },
+      { "boss": "Lichdragon Fortissax", "place": "", "flag_id": 1049304217, "rememberance": 9 }
+    ]
+  },
+  {
+    "region_name": "Tier 6",
+    "regions": [],
+    "bosses": [
+      { "boss": "Dragonkin Soldier", "place": "Siofra River Bank", "flag_id": 1049304208 },
+      { "boss": "Decaying Ekzykes", "place": "Caelid Highway South", "flag_id": 1049304205 },
+      { "boss": "Fell Twin (x2)", "place": "Divine Tower of East Altus", "flag_id": 1049304222 },
+      { "boss": "Godskin Snail", "place": "Spiritcaller Cave", "flag_id": 1049304223 },
+      { "boss": "Rykard, Lord of Blasphemy", "place": "Volcano Manor", "flag_id": 1049304231, "rememberance": 5 }
+    ]
+  },
+  {
+    "region_name": "Tier 7",
+    "regions": [],
+    "bosses": [
+      { "boss": "Esgar, Priest of Blood", "place": "Leyndell Catacombs", "flag_id": 1049304227 },
+      { "boss": "Crucible Knight Siluria", "place": "", "flag_id": 1049304225 },
+      { "boss": "Erdtree Avatar", "place": "Minor Erdtree", "flag_id": 1049304234 },
+      { "boss": "Beastmen of Farum Azula x2", "place": "Dragonbarrow Cave", "flag_id": 1049304238 },
+      { "boss": "Maliketh, the Black Blade", "place": "", "flag_id": 1049304248, "rememberance": 11 }
+    ]
+  },
+  {
+    "region_name": "Tier 8",
+    "regions": [],
+    "bosses": [
+      { "boss": "Godskin Apostle", "place": "Divine Tower of Caelid", "flag_id": 1049304247 },
+      { "boss": "Putrid Tree Spirit", "place": "War-Dead Catacombs", "flag_id": 1049304239 },
+      { "boss": "Misbegotten Crusader", "place": "Cave of the Forlorn", "flag_id": 1049304244 },
+      { "boss": "Astel, Stars of Darkness", "place": "Yelough Anix Tunnel", "flag_id": 1049304242 },
+      { "boss": "Godfrey, First Elden Lord", "place": "Elden Throne", "flag_id": 1049304249, "rememberance": 14 }
+    ]
+  },
+  {
+    "region_name": "Tier 9",
+    "regions": [],
+    "bosses": [
+      { "boss": "Glintstone Dragon Adula", "place": "Moonlight Altar", "flag_id": 1049304253 },
+      { "boss": "Dragonlord Placidusax", "place": "Beside the Great Bridge", "flag_id": 1049304262, "rememberance": 12 },
+      { "boss": "Mohg, Lord of Blood", "place": "Dynasty Mausoleum", "flag_id": 1049304264, "rememberance": 10 },
+      { "boss": "Malenia, Goddess of Rot", "place": "", "flag_id": 1049304261, "rememberance": 13 },
+      { "boss": "RadaBeast", "place": "Fractured Marika", "flag_id": 1049304263, "rememberance": 15 }
+    ]
+  }
+]
